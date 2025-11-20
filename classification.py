@@ -226,9 +226,24 @@ def train_classifier(manifest_path: str, output_model_path: str):
     # Split train/test
     from sklearn.model_selection import train_test_split
     
-    train_seqs, test_seqs, train_labels, test_labels = train_test_split(
-        sequences, labels, test_size=TRAIN_TEST_SPLIT, random_state=42, stratify=labels
-    )
+    # Check if we can stratify (need at least test_size samples per class)
+    min_samples_per_class = min([labels.count(i) for i in set(labels)])
+    test_samples = int(len(sequences) * TRAIN_TEST_SPLIT)
+    can_stratify = test_samples >= num_classes and min_samples_per_class >= 2
+    
+    if not can_stratify:
+        print(f"\n⚠️  WARNING: Too many classes ({num_classes}) for {len(sequences)} samples")
+        print(f"   Cannot use stratified split (need at least {num_classes} test samples)")
+        print(f"   Using simple random split instead")
+        print(f"   Consider reducing min_cluster_size in HDBSCAN or collecting more data\n")
+        
+        train_seqs, test_seqs, train_labels, test_labels = train_test_split(
+            sequences, labels, test_size=TRAIN_TEST_SPLIT, random_state=42
+        )
+    else:
+        train_seqs, test_seqs, train_labels, test_labels = train_test_split(
+            sequences, labels, test_size=TRAIN_TEST_SPLIT, random_state=42, stratify=labels
+        )
     
     print(f"Train samples: {len(train_seqs)}")
     print(f"Test samples: {len(test_seqs)}")

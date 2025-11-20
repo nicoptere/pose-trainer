@@ -37,21 +37,79 @@ import config
 # ============================================================================
 
 # Analysis frame rate (process every Nth frame to speed up)
-ANALYSIS_FPS = 5  # Analyze at 5 frames per second
+ANALYSIS_FPS = 12  # Analyze at 5 frames per second
 
 # Gesture duration constraints (in frames at ANALYSIS_FPS)
-GESTURE_MIN_FRAMES = 5   # Minimum: 1 second at 5 FPS
-GESTURE_MAX_FRAMES = 20  # Maximum: 4 seconds at 5 FPS
+GESTURE_MIN_FRAMES = 2 * ANALYSIS_FPS   # Minimum: 2 seconds at 12 FPS
+GESTURE_MAX_FRAMES = 6 * ANALYSIS_FPS  # Maximum: 6 seconds at 12 FPS
 
 # Clustering configuration
-N_CLUSTERS = 20          # Fixed number of clusters (set to None to use HDBSCAN)
-USE_HDBSCAN = False      # Set to True to automatically infer cluster count
+N_CLUSTERS = None          # Fixed number of clusters (set to None to use HDBSCAN)
+USE_HDBSCAN = True      # Set to True to automatically infer cluster count
 
 # DTW configuration
 DTW_DOWNSAMPLE_FACTOR = 1  # Additional downsampling for DTW (1 = no extra downsampling)
 
 # Output directory
 OUTPUT_DIR = 'output/dtw_clusters'
+
+# ============================================================================
+# SKELETON NORMALIZATION
+# ============================================================================
+
+def normalize_skeleton(landmarks: np.ndarray) -> np.ndarray:
+    """
+    Normalize skeleton to be invariant to position, scale, and orientation.
+    
+    Centers the skeleton at the torso midpoint and scales by torso height.
+    This makes gestures comparable regardless of where the person stands
+    or how far they are from the camera.
+    
+    Args:
+        landmarks: Array of shape [132] with format [x0,y0,z0,v0, x1,y1,z1,v1, ...]
+                   for 33 MediaPipe pose landmarks
+    
+    Returns:
+        Normalized landmarks in the same format
+    """
+    # Reshape to [33, 4] for easier manipulation
+    landmarks = landmarks.reshape(33, 4)
+    
+    # Extract x, y, z coordinates (keep visibility as-is)
+    coords = landmarks[:, :3].copy()
+    visibility = landmarks[:, 3:4]
+    
+    # Key landmark indices (MediaPipe topology)
+    # 11: left shoulder, 12: right shoulder
+    # 23: left hip, 24: right hip
+    left_shoulder = coords[11]
+    right_shoulder = coords[12]
+    left_hip = coords[23]
+    right_hip = coords[24]
+    
+    # Calculate torso center (midpoint of shoulders and hips)
+    shoulder_mid = (left_shoulder + right_shoulder) / 2
+    hip_mid = (left_hip + right_hip) / 2
+    torso_center = (shoulder_mid + hip_mid) / 2
+    
+    # Center all coordinates at torso
+    centered = coords - torso_center
+    
+    # Calculate torso height for scaling
+    torso_height = np.linalg.norm(shoulder_mid - hip_mid)
+    
+    # Avoid division by zero
+    if torso_height < 1e-6:
+        torso_height = 1.0
+    
+    # Scale by torso height (normalize to unit torso)
+    scaled = centered / torso_height
+    
+    # Recombine with visibility
+    normalized = np.concatenate([scaled, visibility], axis=1)
+    
+    # Flatten back to [132]
+    return normalized.flatten()
 
 # ============================================================================
 
@@ -108,7 +166,11 @@ class VideoGestureProcessor:
                     row = []
                     for lm in results.pose_landmarks.landmark:
                         row.extend([lm.x, lm.y, lm.z, lm.visibility])
-                    landmarks_list.append(row)
+                    
+                    # Normalize the skeleton before storing
+                    row_array = np.array(row)
+                    normalized_row = normalize_skeleton(row_array)
+                    landmarks_list.append(normalized_row.tolist())
                 else:
                     # No pose detected, use zero vector
                     landmarks_list.append([0.0] * config.INPUT_SIZE)
@@ -239,6 +301,63 @@ class VideoGestureProcessor:
     def close(self):
         """Release resources."""
         self.pose.close()
+
+
+def save_gesture_segment(gesture_data: dict, output_dir: str, segment_id: int) -> str:
+    """
+    Save a gesture segment as a video file immediately after detection.
+    
+    Args:
+        gesture_data: Dictionary with 'source_video', 'start_frame', 'end_frame', 'sequence'
+        output_dir: Base output directory
+        segment_id: Unique segment identifier
+        
+    Returns:
+        Path to saved segment
+    """
+    source_video = gesture_data['source_video']
+    start_frame = gesture_data['start_frame']
+    end_frame = gesture_data['end_frame']
+    
+    # Create segments directory
+    segments_dir = os.path.join(output_dir, 'segments')
+    os.makedirs(segments_dir, exist_ok=True)
+    
+    # Generate segment filename
+    video_basename = os.path.splitext(os.path.basename(source_video))[0]
+    segment_filename = f"segment_{segment_id:04d}_{video_basename}_f{start_frame}-{end_frame}.mp4"
+    segment_path = os.path.join(segments_dir, segment_filename)
+    
+    # Open source video
+    cap = cv2.VideoCapture(source_video)
+    original_fps = int(cap.get(cv2.CAP_PROP_FPS))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    # Setup video writer (save at original FPS for quality)
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(segment_path, fourcc, original_fps, (width, height))
+    
+    # Calculate original video frame range (accounting for analysis FPS downsampling)
+    # start_frame and end_frame are in analysis FPS, need to map back to original FPS
+    frame_skip = max(1, original_fps // ANALYSIS_FPS)
+    original_start = start_frame * frame_skip
+    original_end = end_frame * frame_skip
+    
+    # Seek to start frame
+    cap.set(cv2.CAP_PROP_POS_FRAMES, original_start)
+    
+    # Write frames
+    for frame_idx in range(original_start, original_end):
+        ret, frame = cap.read()
+        if not ret:
+            break
+        out.write(frame)
+    
+    cap.release()
+    out.release()
+    
+    return segment_path
 
 
 def cluster_gestures_dtw(
@@ -481,6 +600,7 @@ def main():
     for ext in config.VIDEO_EXTENSIONS:
         video_paths.extend(Path(video_dir).glob(f'*{ext}'))
     
+    
     video_paths = [str(p) for p in video_paths]
     
     if not video_paths:
@@ -489,7 +609,11 @@ def main():
     
     print(f"Found {len(video_paths)} videos\n")
     
-    # Process videos
+    # Create output directory early
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    segments_manifest_path = os.path.join(OUTPUT_DIR, 'segments_manifest.json')
+    
+    # Process videos and save segments progressively
     print("=" * 70)
     print("STEP 1: EXTRACTING GESTURES FROM VIDEOS")
     print("=" * 70)
@@ -497,17 +621,65 @@ def main():
     processor = VideoGestureProcessor(target_fps=ANALYSIS_FPS)
     
     all_gestures = []
-    for video_path in tqdm(video_paths, desc="Processing videos"):
+    segment_id = 0
+    
+    # Progressive manifest (updated as we go)
+    progressive_manifest = {
+        'analysis_fps': ANALYSIS_FPS,
+        'gesture_duration_range': {
+            'min_frames': GESTURE_MIN_FRAMES,
+            'max_frames': GESTURE_MAX_FRAMES,
+            'min_seconds': GESTURE_MIN_FRAMES / ANALYSIS_FPS,
+            'max_seconds': GESTURE_MAX_FRAMES / ANALYSIS_FPS
+        },
+        'videos_processed': 0,
+        'total_gestures': 0,
+        'segments': []
+    }
+    
+    for video_idx, video_path in enumerate(tqdm(video_paths, desc="Processing videos")):
         gestures = processor.process_video(
             video_path,
             min_frames=GESTURE_MIN_FRAMES,
             max_frames=GESTURE_MAX_FRAMES
         )
+        
+        # Save each gesture segment immediately
+        for gesture in gestures:
+            # Save video segment
+            segment_path = save_gesture_segment(gesture, OUTPUT_DIR, segment_id)
+            
+            # Add to gesture data
+            gesture['segment_id'] = segment_id
+            gesture['segment_path'] = segment_path
+            
+            # Add to progressive manifest
+            progressive_manifest['segments'].append({
+                'segment_id': segment_id,
+                'segment_path': segment_path,
+                'source_video': gesture['source_video'],
+                'start_frame': gesture['start_frame'],
+                'end_frame': gesture['end_frame'],
+                'duration_frames': gesture['duration_frames'],
+                'duration_seconds': gesture['duration_seconds']
+            })
+            
+            segment_id += 1
+        
         all_gestures.extend(gestures)
+        
+        # Update manifest after each video
+        progressive_manifest['videos_processed'] = video_idx + 1
+        progressive_manifest['total_gestures'] = len(all_gestures)
+        
+        with open(segments_manifest_path, 'w') as f:
+            json.dump(progressive_manifest, f, indent=2)
     
     processor.close()
     
     print(f"\nExtracted {len(all_gestures)} gestures from {len(video_paths)} videos")
+    print(f"Saved segments to: {os.path.join(OUTPUT_DIR, 'segments')}")
+    print(f"Saved segment manifest to: {segments_manifest_path}")
     
     if not all_gestures:
         print("No gestures found. Try adjusting GESTURE_MIN_FRAMES, GESTURE_MAX_FRAMES, or activity threshold.")
@@ -530,11 +702,12 @@ def main():
     print("CLUSTERING COMPLETE")
     print("=" * 70)
     print(f"\nResults saved to: {OUTPUT_DIR}")
-    print(f"  - clustering_manifest.json")
+    print(f"  - segments/ directory (video segments)")
+    print(f"  - segments_manifest.json (all detected segments)")
+    print(f"  - clustering_manifest.json (clustered results)")
     print(f"  - similarity_report.md")
     print(f"  - cluster_<N>/ directories")
     print()
-
 
 
 if __name__ == "__main__":
