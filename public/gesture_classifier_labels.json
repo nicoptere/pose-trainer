@@ -1,0 +1,25 @@
+{
+  "num_classes": 20,
+  "class_names": [
+    "gesture_0",
+    "gesture_1",
+    "gesture_2",
+    "gesture_3",
+    "gesture_4",
+    "gesture_5",
+    "gesture_6",
+    "gesture_7",
+    "gesture_8",
+    "gesture_9",
+    "gesture_10",
+    "gesture_11",
+    "gesture_12",
+    "gesture_13",
+    "gesture_14",
+    "gesture_15",
+    "gesture_16",
+    "gesture_17",
+    "gesture_18",
+    "gesture_19"
+  ]
+}

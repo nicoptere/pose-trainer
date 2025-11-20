@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pose Trainer</title>
+    <title>Gesture Classifier - Live Detection</title>
     <link rel="stylesheet" href="style.css">
     <!-- MediaPipe Pose -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
@@ -14,16 +14,23 @@
 </head>
 <body>
     <div class="container">
-        <h1>Pose Trainer</h1>
+        <h1>Gesture Classifier</h1>
+        <p class="subtitle">Temporal gesture detection with 4-second window</p>
         <div class="video-container">
             <video class="input_video"></video>
             <canvas class="output_canvas" width="1280px" height="720px"></canvas>
             <div id="loading">Loading model...</div>
         </div>
         <div class="result-container">
-            <h2>Detected Pose:</h2>
+            <h2>Detected Gesture:</h2>
             <div id="pose-result" class="pose-label">Waiting...</div>
-            <div id="confidence" class="confidence-bar"></div>
+            <div class="confidence-container">
+                <div id="confidence" class="confidence-bar"></div>
+            </div>
+            <div class="info-text">
+                <p>📊 The model analyzes 30 frames (~4 seconds) to classify your gesture</p>
+                <p>💡 Perform smooth, deliberate movements for best results</p>
+            </div>
         </div>
     </div>
     <script src="app.js"></script>

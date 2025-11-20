@@ -1,33 +1,49 @@
-body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #1e1e1e;
-    color: #ffffff;
+* {
     margin: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
 }
 
 .container {
-    text-align: center;
-    width: 90%;
-    max-width: 1280px;
+    background: white;
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 1400px;
+    width: 100%;
 }
 
 h1 {
-    margin-bottom: 20px;
-    color: #00d2ff;
+    text-align: center;
+    color: #333;
+    margin-bottom: 10px;
+    font-size: 2.5em;
+}
+
+.subtitle {
+    text-align: center;
+    color: #666;
+    margin-bottom: 30px;
+    font-size: 1.1em;
 }
 
 .video-container {
     position: relative;
-    width: 100%;
-    padding-top: 56.25%; /* 16:9 Aspect Ratio */
-    background-color: #000;
+    max-width: 100%;
+    margin-bottom: 30px;
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    background: #000;
 }
 
 .input_video {
@@ -35,11 +51,9 @@ h1 {
 }
 
 .output_canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
     width: 100%;
-    height: 100%;
+    height: auto;
+    display: block;
 }
 
 #loading {
@@ -47,33 +61,83 @@ h1 {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 24px;
-    background: rgba(0,0,0,0.7);
-    padding: 20px;
-    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 20px 40px;
+    border-radius: 10px;
+    font-size: 1.2em;
 }
 
 .result-container {
-    margin-top: 20px;
-    padding: 20px;
-    background-color: #2d2d2d;
-    border-radius: 12px;
+    text-align: center;
+}
+
+h2 {
+    color: #555;
+    margin-bottom: 15px;
+    font-size: 1.5em;
 }
 
 .pose-label {
-    font-size: 36px;
+    font-size: 2.5em;
     font-weight: bold;
-    color: #00ff88;
-    margin: 10px 0;
-    min-height: 50px;
+    color: #667eea;
+    margin: 20px 0;
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.confidence-container {
+    width: 100%;
+    max-width: 600px;
+    margin: 20px auto;
+    height: 40px;
+    background: #f0f0f0;
+    border-radius: 20px;
+    overflow: hidden;
+    position: relative;
 }
 
 .confidence-bar {
-    height: 4px;
-    background-color: #00ff88;
-    width: 0%;
-    transition: width 0.1s ease;
-    margin: 0 auto;
-    max-width: 300px;
-    border-radius: 2px;
+    height: 100%;
+    background: #4CAF50;
+    border-radius: 20px;
+    transition: width 0.5s ease, background-color 0.5s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 1.1em;
+    min-width: 0;
+}
+
+.info-text {
+    margin-top: 30px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    border-left: 4px solid #667eea;
+}
+
+.info-text p {
+    color: #666;
+    margin: 8px 0;
+    font-size: 1em;
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 15px;
+    }
+
+    h1 {
+        font-size: 1.8em;
+    }
+
+    .pose-label {
+        font-size: 1.8em;
+    }
 }
