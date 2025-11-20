@@ -1,5 +1,17 @@
 # Gesture Detection, Segmentation & Similarity System
 
+
+# Step 1: Cluster gestures
+python run.py
+
+# Step 2: Extract video segments (optional, for visualization)
+python extract_cluster.py
+
+# Step 3: Train classifier on clustered data
+python classification.py
+
+=====================================
+
 PyTorch-based system to detect gestures in videos, segment them into clips, and sort by similarity.
 
 ## Quick Start
