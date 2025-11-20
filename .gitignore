@@ -6,6 +6,7 @@
 *.pth
 output
 models
+temp
 videos
 output_with_model
 __pycache__

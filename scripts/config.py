@@ -31,7 +31,7 @@ EMBEDDING_SIZE = 64  # Size of gesture embedding
 
 # Gesture Detection Configuration
 CONFIDENCE_THRESHOLD = 0.7  # Minimum confidence for gesture detection
-MIN_GESTURE_LENGTH = 15  # Minimum frames for a valid gesture
+MIN_GESTURE_LENGTH = 30  # Minimum frames for a valid gesture
 MAX_GESTURE_LENGTH = 120  # Maximum frames for a valid gesture
 ACTIVITY_THRESHOLD = 0.05  # Threshold for movement detection (optional)
 
