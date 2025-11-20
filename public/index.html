@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,10 +9,12 @@
     <!-- MediaPipe Pose -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
+        crossorigin="anonymous"></script>
     <!-- ONNX Runtime Web -->
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
 </head>
+
 <body>
     <div class="container">
         <h1>Gesture Classifier</h1>
@@ -32,7 +35,14 @@
                 <p>💡 Perform smooth, deliberate movements for best results</p>
             </div>
         </div>
+        <div class="cluster-gallery">
+            <h2>Gesture Clusters</h2>
+            <div id="cluster-grid" class="cluster-grid">
+                <!-- Cluster cards will be dynamically generated here -->
+            </div>
+        </div>
     </div>
     <script src="app.js"></script>
 </body>
+
 </html>
