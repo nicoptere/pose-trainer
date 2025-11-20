@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pose Trainer</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- MediaPipe Pose -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <!-- ONNX Runtime Web -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Pose Trainer</h1>
+        <div class="video-container">
+            <video class="input_video"></video>
+            <canvas class="output_canvas" width="1280px" height="720px"></canvas>
+            <div id="loading">Loading model...</div>
+        </div>
+        <div class="result-container">
+            <h2>Detected Pose:</h2>
+            <div id="pose-result" class="pose-label">Waiting...</div>
+            <div id="confidence" class="confidence-bar"></div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

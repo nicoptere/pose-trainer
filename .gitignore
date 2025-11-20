@@ -1,0 +1,11 @@
+*.mov
+*.mp4
+*.pt
+*.onnx
+*.npz
+*.pth
+output
+models
+videos
+output_with_model
+__pycache__

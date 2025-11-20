@@ -1,0 +1,11 @@
+mediapipe
+opencv-python
+pandas
+torch
+onnx
+scikit-learn
+torchvision
+tqdm
+matplotlib
+seaborn
+dtaidistance
