@@ -1,86 +1,69 @@
-# Webcam Gesture Classifier
+# Gesture Classifier Web App - Complete
 
-Real-time gesture classification using MediaPipe Pose and a trained ONNX neural network.
+## ✅ What's New
 
-## Features
+**2-Column Layout:**
+- Left: Video feed with pose detection and results
+- Right: Scrollable cluster gallery (320px wide) with animated gesture previews
 
-- **Temporal Window**: Analyzes 30 frames (~4 seconds) for accurate gesture recognition
-- **Live Webcam**: Real-time pose detection and classification
-- **Confidence Visualization**: Shows prediction confidence with color-coded bar
-- **20 Gesture Classes**: Trained on DTW-clustered gesture data
+**Video Upload Support:**
+- Switch between webcam and file upload
+- Process uploaded videos for gesture detection
+- Radio buttons at the top to select source
+
+**Static Cluster Gallery:**
+- Shows looping animations for all 20 clusters
+- Animations demonstrate what the model expects
+- Highlights active cluster when gesture is detected
+- **Does NOT update with live camera feed** (static animations only)
 
 ## How to Use
 
-### 1. Start a Local Server
+1. **Start the server** (if not already running):
+   ```bash
+   cd public
+   python -m http.server 8000
+   ```
 
-The app requires HTTPS or localhost to access the webcam. Use Python's built-in server:
+2. **Open in browser**: http://localhost:8000
 
-```bash
-cd public
-python -m http.server 8000
+3. **Select source**:
+   - **Webcam**: Default, starts automatically
+   - **Upload Video**: Click radio button, select file, click "Process Video"
+
+4. **Perform gestures** or let video play
+   - Model analyzes 30 frames (~4 seconds)
+   - Results show cluster name and confidence
+   - Matching cluster card highlights in the gallery
+
+## File Structure
+
+```
+public/
+├── index.html                    # 2-column layout with source selector
+├── style.css                     # Responsive grid, scrollable cluster panel
+├── app.js                        # Clean implementation (recreated from scratch)
+├── gesture_classifier.onnx       # Trained model
+├── gesture_classifier_labels.json # Class labels
+├── cluster_animations.json       # Animation data (20 clusters)
+└── README.md                     # This file
 ```
 
-### 2. Open in Browser
+## Features
 
-Navigate to:
-```
-http://localhost:8000
-```
+✅ **Webcam**: Real-time gesture detection
+✅ **Video Upload**: Process video files
+✅ **Temporal Window**: 4-second sliding window (30 frames)
+✅ **Confidence Visualization**: Color-coded bar (green/yellow/red)
+✅ **Animated Previews**: Each cluster shows looping gesture
+✅ **Responsive**: Works on desktop and mobile
+✅ **Clean Code**: Organized sections, well-commented
 
-### 3. Allow Webcam Access
+## Notes
 
-When prompted, allow the browser to access your webcam.
+- Cluster gallery shows **static animations only** (not updated by live feed)
+- Animations demonstrate what gestures the model is looking for
+- Model works on **normalized pose landmarks** (0-1 range)
+- Best results with good lighting and full body visibility
 
-### 4. Perform Gestures
-
-- Stand in view of the camera so your full body is visible
-- Perform smooth, deliberate gestures
-- The model will analyze 30 frames (~4 seconds) to classify your gesture
-- Results appear with confidence percentage
-
-## Technical Details
-
-- **Model**: TemporalPoseModel (LSTM-based)
-- **Input**: 30 frames × 132 features  (33 pose landmarks × 4 values each)
-- **Output**: 20 gesture classes
-- **FPS**: ~7.5 FPS for inference (balances accuracy and performance)
-- **Pose Detection**: MediaPipe Pose (via CDN)
-- **Inference**: ONNX Runtime Web
-
-## Files
-
-- `index.html` - Web interface
-- `app.js` - Application logic with temporal window
-- `style.css` - Styling
-- `gesture_classifier.onnx` - Trained LSTM model
-- `gesture_classifier_labels.json` - Class names
-
-## Tips for Best Results
-
-1. **Lighting**: Ensure good lighting for pose detection
-2. **Background**: Plain or contrasting background works best 
-3. **Full Body**: Stay in frame with your whole body visible
-4. **Smooth Movements**: Perform gestures smoothly over 3-4 seconds
-5. **Distance**: Stand 1.5-3 meters from camera
-
-## Troubleshooting
-
-**Model not loading?**
-- Check browser console for errors
-- Ensure `gesture_classifier.onnx` and `gesture_classifier_labels.json` are in the `public` folder
-
-**Webcam not working?**
-- Use HTTPS or localhost (browser security requirement)
-- Check browser permissions
-- Ensure no other app is using the webcam
-
-**Low accuracy?**
-- Perform gestures similar to training data
-- Ensure good lighting and visibility
-- Wait for buffer to fill (30 frames)
-
-## Browser Compatibility
-
-- Chrome/Edge: ✅ Recommended
-- Firefox: ✅ Supported
-- Safari: ✅ Supported (may need to enable experimental features)
+Enjoy your gesture classifier! 🎉
