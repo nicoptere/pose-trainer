@@ -11,7 +11,7 @@ python run.py --extract-clusters
 python classification.py
 
 # Step 4: retreive canonical gestures from ONNX model ( frontend)
-python extract_animations.py
+python classification.py --extract-animations
 =====================================
 
 PyTorch-based system to detect gestures in videos, segment them into clips, and sort by similarity.

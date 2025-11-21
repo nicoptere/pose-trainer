@@ -5,10 +5,14 @@ This script trains an ONNX classifier on the clustered gestures produced by run.
 Each cluster becomes a class label for supervised learning.
 
 Usage:
-    python classify.py
+    # Train classifier
+    python classification.py
+    
+    # Extract animations for web app
+    python classification.py --extract-animations
     
     Or customize:
-    python classify.py --manifest output/clustering_manifest.json \
+    python classification.py --manifest output/clustering_manifest.json \
                        --output models/gesture_classifier.onnx
 """
 
@@ -399,6 +403,97 @@ def train_classifier(manifest_path: str, output_model_path: str):
     print("=" * 70)
 
 
+def extract_cluster_animations(
+    manifest_path: str = MANIFEST_PATH,
+    output_path: str = 'public/cluster_animations.json'
+) -> None:
+    """
+    Extract representative gesture sequences for each cluster to use as animations.
+    
+    Args:
+        manifest_path: Path to clustering_manifest.json
+        output_path: Path to save animations JSON
+    """
+    print("=" * 70)
+    print("EXTRACTING CLUSTER ANIMATIONS")
+    print("=" * 70)
+    print()
+    
+    # Load manifest
+    if not os.path.exists(manifest_path):
+        print(f"Error: Manifest not found at {manifest_path}")
+        print("Please run 'python run.py' first to generate clustering results.")
+        return
+    
+    with open(manifest_path, 'r') as f:
+        manifest = json.load(f)
+    
+    analysis_fps = manifest.get('analysis_fps', 5)
+    num_clusters = manifest['num_clusters']
+    
+    print(f"Found {num_clusters} clusters")
+    print(f"Analysis FPS: {analysis_fps}")
+    print()
+    
+    # Extract representative sequences
+    animations = {}
+    
+    for cluster_id in tqdm(range(num_clusters), desc="Extracting sequences"):
+        cluster_data = manifest['clusters'].get(str(cluster_id))
+        
+        if not cluster_data or not cluster_data['gestures']:
+            print(f"Warning: Cluster {cluster_id} has no gestures, skipping")
+            continue
+        
+        # Get first gesture as representative
+        gesture = cluster_data['gestures'][0]
+        
+        try:
+            sequence = load_gesture_sequence(
+                video_path=gesture['source_video'],
+                start_frame=gesture['start_frame'],
+                end_frame=gesture['end_frame'],
+                analysis_fps=analysis_fps
+            )
+            
+            # Convert to list for JSON serialization
+            animations[str(cluster_id)] = {
+                'sequence': [list(frame) for frame in sequence],
+                'num_frames': len(sequence),
+                'source_video': os.path.basename(gesture['source_video']),
+                'duration_seconds': gesture['duration_seconds']
+            }
+            
+        except Exception as e:
+            print(f"Error loading sequence for cluster {cluster_id}: {e}")
+            continue
+    
+    # Save animations
+    print(f"\nSaving animations to {output_path}")
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    
+    output_data = {
+        'num_clusters': num_clusters,
+        'analysis_fps': analysis_fps,
+        'animations': animations
+    }
+    
+    with open(output_path, 'w') as f:
+        json.dump(output_data, f)
+    
+    print(f"Saved {len(animations)} cluster animations")
+    
+    # Print statistics
+    print("\nAnimation Statistics:")
+    for cluster_id, anim in animations.items():
+        print(f"  Cluster {cluster_id}: {anim['num_frames']} frames ({anim['duration_seconds']:.1f}s)")
+    
+    print("\n" + "=" * 70)
+    print("EXTRACTION COMPLETE")
+    print("=" * 70)
+    print(f"\nYou can now use the web app with animated cluster previews!")
+
+
 def main():
     """Main entry point."""
     import argparse
@@ -408,6 +503,10 @@ def main():
                        help='Path to clustering_manifest.json')
     parser.add_argument('--output', type=str, default=OUTPUT_MODEL_PATH,
                        help='Path to save ONNX model')
+    parser.add_argument('--extract-animations', action='store_true',
+                       help='Extract cluster animations for web app instead of training')
+    parser.add_argument('--animations-output', type=str, default='public/cluster_animations.json',
+                       help='Path to save animations JSON')
     
     args = parser.parse_args()
     
@@ -416,7 +515,12 @@ def main():
         print("Please run 'python run.py' first to generate clustering results.")
         return
     
-    train_classifier(args.manifest, args.output)
+    if args.extract_animations:
+        # Extract animations mode
+        extract_cluster_animations(args.manifest, args.animations_output)
+    else:
+        # Training mode
+        train_classifier(args.manifest, args.output)
 
 
 if __name__ == "__main__":
