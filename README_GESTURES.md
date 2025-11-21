@@ -12,6 +12,18 @@ python classification.py
 
 # Step 4: retreive canonical gestures from ONNX model ( frontend)
 python classification.py --extract-animations
+
+# === Google Cloud Storage Support ===
+# Use run_gcs.py and classification_gcs.py for cloud storage:
+
+# Process videos from GCS, save to GCS
+python run_gcs.py --videos gs://my-bucket/videos/ --output gs://my-bucket/output/
+
+# Train with GCS manifest, save model to GCS
+python classification_gcs.py --manifest gs://my-bucket/output/clustering_manifest.json --output gs://my-bucket/models/
+
+# Extract animations to GCS
+python classification_gcs.py --extract-animations --manifest gs://my-bucket/output/clustering_manifest.json --animations-output gs://my-bucket/public/
 =====================================
 
 PyTorch-based system to detect gestures in videos, segment them into clips, and sort by similarity.
