@@ -51,7 +51,7 @@ USE_HDBSCAN = True      # Set to True to automatically infer cluster count
 DTW_DOWNSAMPLE_FACTOR = 1  # Additional downsampling for DTW (1 = no extra downsampling)
 
 # Output directory
-OUTPUT_DIR = 'output/dtw_clusters'
+OUTPUT_DIR = 'output/clusters'
 
 # ============================================================================
 # SKELETON NORMALIZATION
@@ -364,7 +364,7 @@ def cluster_gestures_dtw(
     gestures: List[Dict],
     n_clusters: int = None,
     use_hdbscan: bool = False,
-    output_dir: str = 'output/dtw_clusters'
+    output_dir: str = 'output/clusters'
 ) -> Dict:
     """
     Cluster gestures using DTW similarity.

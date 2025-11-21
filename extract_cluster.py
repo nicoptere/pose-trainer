@@ -9,7 +9,7 @@ Usage:
     python extract+cluster.py
     
 Configuration:
-    - Manifest path: output/dtw_clusters/clustering_manifest.json
+    - Manifest path: output/clustering_manifest.json
     - Output format: MP4 at 30fps
     - Naming: cluster_N/<video_name>_gesture_<idx>.mp4
 """
@@ -23,7 +23,7 @@ from tqdm import tqdm
 
 
 # Configuration
-MANIFEST_PATH = 'output/dtw_clusters/clustering_manifest.json'
+MANIFEST_PATH = 'output/clustering_manifest.json'
 OUTPUT_FPS = 30  # Output video frame rate
 VIDEO_CODEC = 'mp4v'  # MP4 codec
 

@@ -8,7 +8,7 @@ Usage:
     python classify.py
     
     Or customize:
-    python classify.py --manifest output/dtw_clusters/clustering_manifest.json \
+    python classify.py --manifest output/clustering_manifest.json \
                        --output models/gesture_classifier.onnx
 """
 
@@ -37,7 +37,7 @@ from gesture_detector import TemporalPoseModel
 # CONFIGURABLE PARAMETERS
 # ============================================================================
 
-MANIFEST_PATH = 'output/dtw_clusters/clustering_manifest.json'
+MANIFEST_PATH = 'output/clustering_manifest.json'
 OUTPUT_MODEL_PATH = 'models/gesture_classifier.onnx'
 
 # Training configuration

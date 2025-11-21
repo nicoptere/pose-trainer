@@ -18,7 +18,7 @@ from tqdm import tqdm
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'scripts'))
 import config
 
-MANIFEST_PATH = 'output/dtw_clusters/clustering_manifest.json'
+MANIFEST_PATH = 'output/clustering_manifest.json'
 OUTPUT_PATH = 'public/cluster_animations.json'
 
 
