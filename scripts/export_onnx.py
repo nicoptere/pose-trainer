@@ -4,7 +4,7 @@ import torch.nn as nn
 from sklearn.preprocessing import LabelEncoder
 
 # Configuration
-INPUT_FILE = 'data.csv'
+INPUT_FILE = 'output/data.csv'
 MODEL_PATH = 'model.onnx'
 
 class PoseClassifier(nn.Module):

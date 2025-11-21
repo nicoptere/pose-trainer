@@ -9,7 +9,7 @@ mp_pose = mp.solutions.pose
 pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
 # Define output file
-OUTPUT_FILE = 'data.csv'
+OUTPUT_FILE = 'output/data.csv'
 VIDEO_DIR = 'videos'
 
 def extract_landmarks(video_path, class_name):

@@ -9,7 +9,7 @@ from typing import List, Tuple
 import config
 
 
-def create_sequences_from_csv(csv_path: str = 'data.csv',
+def create_sequences_from_csv(csv_path: str = 'output/data.csv',
                               sequence_length: int = None,
                               stride: int = None,
                               output_path: str = 'data_sequences.npz') -> Tuple[np.ndarray, np.ndarray]:
@@ -204,7 +204,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare sequence data for temporal model")
     parser.add_argument('--source', type=str, choices=['csv', 'videos'], default='csv',
                        help='Data source (csv or videos)')
-    parser.add_argument('--csv', type=str, default='data.csv',
+    parser.add_argument('--csv', type=str, default='output/data.csv',
                        help='Path to CSV file (if source=csv)')
     parser.add_argument('--videos', type=str, default=None,
                        help='Path to videos directory (if source=videos)')

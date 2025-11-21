@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 
 # Load data to get dimensions
-df = pd.read_csv('data.csv')
+df = pd.read_csv('output/data.csv')
 X = df.iloc[:, :-1].values
 y_str = df.iloc[:, -1].values
 

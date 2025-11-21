@@ -30,7 +30,7 @@ python scripts/process_gestures.py --input videos/ --output output/ --simple
 M
 1. **Prepare sequences**:
    ```bash
-   python scripts/prepare_sequences.py --source csv --csv data.csv
+   python scripts/prepare_sequences.py --source csv --csv output/data.csv
    ```
 
 2. **Train temporal model**:

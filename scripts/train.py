@@ -10,7 +10,7 @@ import json
 import torch.onnx
 
 # Configuration
-INPUT_FILE = 'data.csv'
+INPUT_FILE = 'output/data.csv'
 MODEL_PATH = 'model.onnx'
 LABELS_PATH = 'public/labels.json'
 EPOCHS = 50
