@@ -1,0 +1,8 @@
+{
+    "analysis_fps": 12,
+    "gesture_min_seconds": 2,
+    "gesture_max_seconds": 6,
+    "n_clusters": null,
+    "use_hdbscan": true,
+    "dtw_downsample_factor": 1
+}

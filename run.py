@@ -40,19 +40,49 @@ import config
 # CONFIGURABLE PARAMETERS
 # ============================================================================
 
+# Load configuration from file if it exists, otherwise use defaults
+def load_config():
+    """Load configuration from gesture_config.json or use defaults."""
+    config_path = 'gesture_config.json'
+    
+    # Default configuration
+    defaults = {
+        'analysis_fps': 12,
+        'gesture_min_seconds': 2,
+        'gesture_max_seconds': 6,
+        'n_clusters': None,
+        'use_hdbscan': True,
+        'dtw_downsample_factor': 1
+    }
+    
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r') as f:
+                user_config = json.load(f)
+                defaults.update(user_config)
+                print(f"✅ Loaded configuration from {config_path}")
+        except Exception as e:
+            print(f"⚠️  Warning: Could not load {config_path}: {e}")
+            print("   Using default configuration")
+    
+    return defaults
+
+# Load configuration
+_config = load_config()
+
 # Analysis frame rate (process every Nth frame to speed up)
-ANALYSIS_FPS = 12  # Analyze at 5 frames per second
+ANALYSIS_FPS = _config['analysis_fps']
 
 # Gesture duration constraints (in frames at ANALYSIS_FPS)
-GESTURE_MIN_FRAMES = 2 * ANALYSIS_FPS   # Minimum: 2 seconds at 12 FPS
-GESTURE_MAX_FRAMES = 6 * ANALYSIS_FPS  # Maximum: 6 seconds at 12 FPS
+GESTURE_MIN_FRAMES = int(_config['gesture_min_seconds'] * ANALYSIS_FPS)
+GESTURE_MAX_FRAMES = int(_config['gesture_max_seconds'] * ANALYSIS_FPS)
 
 # Clustering configuration
-N_CLUSTERS = None          # Fixed number of clusters (set to None to use HDBSCAN)
-USE_HDBSCAN = True      # Set to True to automatically infer cluster count
+N_CLUSTERS = _config['n_clusters']
+USE_HDBSCAN = _config['use_hdbscan']
 
 # DTW configuration
-DTW_DOWNSAMPLE_FACTOR = 1  # Additional downsampling for DTW (1 = no extra downsampling)
+DTW_DOWNSAMPLE_FACTOR = _config['dtw_downsample_factor']
 
 # Output directory function (generates unique names based on config)
 def get_output_dir(video_count: int = None) -> str:
