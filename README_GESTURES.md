@@ -24,6 +24,25 @@ python classification_gcs.py --manifest gs://my-bucket/output/clustering_manifes
 
 # Extract animations to GCS
 python classification_gcs.py --extract-animations --manifest gs://my-bucket/output/clustering_manifest.json --animations-output gs://my-bucket/public/
+
+# === Google Colab Workflow ===
+# For cloud-based processing without local setup, use the provided Colab notebook:
+# [Open in Colab](gesture_clustering_colab.ipynb)
+
+# Key Insights for Colab Usage:
+# 1. Free GPU/TPU acceleration for faster processing
+# 2. No local installation required
+# 3. Seamless Google Drive ↔ GCS integration
+# 4. Persistent storage via GCS buckets
+# 5. Share notebooks with team members
+
+# Typical Colab Workflow:
+# 1. Mount Google Drive and authenticate GCS
+# 2. Copy training videos from Drive to GCS bucket
+# 3. Run gesture detection and clustering (30-60 min for ~50 videos)
+# 4. Train classifier on clustered gestures (5-10 min)
+# 5. Extract animations for web app
+# 6. Download results or keep in GCS for webapp access
 =====================================
 
 PyTorch-based system to detect gestures in videos, segment them into clips, and sort by similarity.
