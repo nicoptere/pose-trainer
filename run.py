@@ -54,7 +54,23 @@ USE_HDBSCAN = True      # Set to True to automatically infer cluster count
 # DTW configuration
 DTW_DOWNSAMPLE_FACTOR = 1  # Additional downsampling for DTW (1 = no extra downsampling)
 
-# Output directory
+# Output directory function (generates unique names based on config)
+def get_output_dir(video_count: int = None) -> str:
+    """
+    Generate output directory name with metadata.
+    Format: output_<N>v_<FPS>fps_<MIN>-<MAX>f
+    
+    Example: output_50v_12fps_24-72f
+    """
+    if video_count is None:
+        video_count = 0
+    
+    min_sec = GESTURE_MIN_FRAMES / ANALYSIS_FPS
+    max_sec = GESTURE_MAX_FRAMES / ANALYSIS_FPS
+    
+    return f"output_{video_count}v_{ANALYSIS_FPS}fps_{GESTURE_MIN_FRAMES}-{GESTURE_MAX_FRAMES}f"
+
+# Default output directory (will be updated with video count during runtime)
 OUTPUT_DIR = 'output/clusters'
 
 # ============================================================================
@@ -756,15 +772,8 @@ def main():
     print("=" * 70)
     print("DTW-BASED GESTURE CLUSTERING")
     print("=" * 70)
-    print(f"\nConfiguration:")
-    print(f"  Analysis FPS: {ANALYSIS_FPS}")
-    print(f"  Gesture duration: {GESTURE_MIN_FRAMES}-{GESTURE_MAX_FRAMES} frames")
-    print(f"  Duration range: {GESTURE_MIN_FRAMES/ANALYSIS_FPS:.1f}-{GESTURE_MAX_FRAMES/ANALYSIS_FPS:.1f} seconds")
-    print(f"  Clustering: {'HDBSCAN (auto)' if USE_HDBSCAN else f'K-means (k={N_CLUSTERS})'}")
-    print(f"  Output directory: {OUTPUT_DIR}")
-    print()
     
-    # Find videos
+    # Find videos first to get count for output naming
     video_dir = 'videos'
     if not os.path.exists(video_dir):
         print(f"Error: Video directory '{video_dir}' not found")
@@ -774,18 +783,28 @@ def main():
     for ext in config.VIDEO_EXTENSIONS:
         video_paths.extend(Path(video_dir).glob(f'*{ext}'))
     
-    
-    video_paths = [str(p) for p in video_paths]
+    video_paths = sorted([str(p) for p in video_paths])
     
     if not video_paths:
         print(f"No videos found in '{video_dir}'")
         return
     
-    print(f"Found {len(video_paths)} videos\n")
+    # Generate dynamic output directory
+    video_count = len(video_paths)
+    output_dir = get_output_dir(video_count)
+    
+    print(f"\nConfiguration:")
+    print(f"  Videos found: {video_count}")
+    print(f"  Analysis FPS: {ANALYSIS_FPS}")
+    print(f"  Gesture duration: {GESTURE_MIN_FRAMES}-{GESTURE_MAX_FRAMES} frames")
+    print(f"  Duration range: {GESTURE_MIN_FRAMES/ANALYSIS_FPS:.1f}-{GESTURE_MAX_FRAMES/ANALYSIS_FPS:.1f} seconds")
+    print(f"  Clustering: {'HDBSCAN (auto)' if USE_HDBSCAN else f'K-means (k={N_CLUSTERS})'}")
+    print(f"  Output directory: {output_dir}")
+    print()
     
     # Create output directory early
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    segments_manifest_path = os.path.join(OUTPUT_DIR, 'segments_manifest.json')
+    os.makedirs(output_dir, exist_ok=True)
+    segments_manifest_path = os.path.join(output_dir, 'segments_manifest.json')
     
     # Process videos and save segments progressively
     print("=" * 70)
@@ -821,7 +840,7 @@ def main():
         # Save each gesture segment immediately
         for gesture in gestures:
             # Save video segment
-            segment_path = save_gesture_segment(gesture, OUTPUT_DIR, segment_id)
+            segment_path = save_gesture_segment(gesture, output_dir, segment_id)
             
             # Add to gesture data
             gesture['segment_id'] = segment_id
@@ -852,7 +871,7 @@ def main():
     processor.close()
     
     print(f"\nExtracted {len(all_gestures)} gestures from {len(video_paths)} videos")
-    print(f"Saved segments to: {os.path.join(OUTPUT_DIR, 'segments')}")
+    print(f"Saved segments to: {os.path.join(output_dir, 'segments')}")
     print(f"Saved segment manifest to: {segments_manifest_path}")
     
     if not all_gestures:
@@ -868,14 +887,14 @@ def main():
         all_gestures,
         n_clusters=N_CLUSTERS,
         use_hdbscan=USE_HDBSCAN,
-        output_dir=OUTPUT_DIR
+        output_dir=output_dir
     )
     
     # Summary
     print("\n" + "=" * 70)
     print("CLUSTERING COMPLETE")
     print("=" * 70)
-    print(f"\nResults saved to: {OUTPUT_DIR}")
+    print(f"\nResults saved to: {output_dir}")
     print(f"  - segments/ directory (video segments)")
     print(f"  - segments_manifest.json (all detected segments)")
     print(f"  - clustering_manifest.json (clustered results)")
