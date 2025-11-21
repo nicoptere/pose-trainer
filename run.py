@@ -5,7 +5,11 @@ This script processes videos in the 'videos' folder, extracts pose sequences at 
 detects gestures within a specified duration range, and clusters them using DTW similarity.
 
 Usage:
+    # Run full pipeline (detect gestures + cluster)
     python run.py
+    
+    # Extract video segments organized by cluster after clustering
+    python run.py --extract-clusters
     
 Configuration:
     Edit the constants below to adjust:
@@ -576,6 +580,176 @@ def cluster_gestures_dtw(
     return manifest
 
 
+def extract_video_segment(
+    video_path: str,
+    start_frame: int,
+    end_frame: int,
+    output_path: str,
+    output_fps: int = 30,
+    analysis_fps: int = None
+) -> bool:
+    """
+    Extract a segment from a video and save it.
+    
+    Args:
+        video_path: Path to source video
+        start_frame: Start frame (in analysis FPS space)
+        end_frame: End frame (in analysis FPS space)
+        output_path: Path to save extracted segment
+        output_fps: Output video frame rate
+        analysis_fps: Analysis FPS used during detection (for frame mapping)
+        
+    Returns:
+        Success status
+    """
+    # Open source video
+    cap = cv2.VideoCapture(video_path)
+    
+    if not cap.isOpened():
+        print(f"Error: Could not open video {video_path}")
+        return False
+    
+    # Get video properties
+    original_fps = int(cap.get(cv2.CAP_PROP_FPS))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    # Create output video writer
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(output_path, fourcc, output_fps, (width, height))
+    
+    if not out.isOpened():
+        print(f"Error: Could not create output video {output_path}")
+        cap.release()
+        return False
+    
+    # Map analysis frames to original video frames
+    if analysis_fps is None:
+        analysis_fps = ANALYSIS_FPS
+    
+    frame_skip = max(1, original_fps // analysis_fps)
+    original_start_frame = start_frame * frame_skip
+    original_end_frame = end_frame * frame_skip
+    
+    # Seek to start frame
+    cap.set(cv2.CAP_PROP_POS_FRAMES, original_start_frame)
+    
+    # Extract frames
+    frames_extracted = 0
+    for frame_idx in range(original_start_frame, original_end_frame):
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        out.write(frame)
+        frames_extracted += 1
+    
+    # Release resources
+    cap.release()
+    out.release()
+    
+    return frames_extracted > 0
+
+
+def extract_clusters_from_manifest(
+    manifest_path: str = None,
+    output_fps: int = 30
+) -> Dict:
+    """
+    Extract video segments organized by cluster from clustering manifest.
+    
+    Args:
+        manifest_path: Path to clustering_manifest.json (default: OUTPUT_DIR/clustering_manifest.json)
+        output_fps: Output video frame rate
+        
+    Returns:
+        Statistics about extraction
+    """
+    if manifest_path is None:
+        manifest_path = os.path.join(OUTPUT_DIR, 'clustering_manifest.json')
+    
+    print(f"\nLoading manifest from: {manifest_path}")
+    
+    if not os.path.exists(manifest_path):
+        raise FileNotFoundError(f"Manifest not found: {manifest_path}")
+    
+    with open(manifest_path, 'r') as f:
+        manifest = json.load(f)
+    
+    # Get manifest info
+    total_gestures = manifest.get('total_gestures', 0)
+    num_clusters = manifest.get('num_clusters', 0)
+    analysis_fps = manifest.get('analysis_fps', ANALYSIS_FPS)
+    
+    print(f"\nManifest Summary:")
+    print(f"  Total gestures: {total_gestures}")
+    print(f"  Number of clusters: {num_clusters}")
+    print(f"  Analysis FPS: {analysis_fps}")
+    print(f"  Output FPS: {output_fps}")
+    print()
+    
+    # Base output directory
+    base_output_dir = os.path.dirname(manifest_path)
+    
+    # Statistics
+    stats = {
+        'total_gestures': total_gestures,
+        'extracted': 0,
+        'failed': 0,
+        'clusters': {}
+    }
+    
+    # Process each cluster
+    clusters = manifest.get('clusters', {})
+    
+    for cluster_id, cluster_data in clusters.items():
+        cluster_dir = os.path.join(base_output_dir, f'cluster_{cluster_id}')
+        os.makedirs(cluster_dir, exist_ok=True)
+        
+        gestures = cluster_data.get('gestures', [])
+        print(f"Processing Cluster {cluster_id}: {len(gestures)} gestures")
+        
+        cluster_stats = {
+            'total': len(gestures),
+            'extracted': 0,
+            'failed': 0
+        }
+        
+        # Process each gesture in the cluster
+        for idx, gesture in enumerate(tqdm(gestures, desc=f"  Cluster {cluster_id}")):
+            source_video = gesture.get('source_video')
+            video_name = gesture.get('video_name', Path(source_video).stem)
+            start_frame = gesture.get('start_frame')
+            end_frame = gesture.get('end_frame')
+            
+            # Create output filename
+            output_filename = f"{video_name}_gesture_{idx:03d}.mp4"
+            output_path = os.path.join(cluster_dir, output_filename)
+            
+            # Extract segment
+            success = extract_video_segment(
+                video_path=source_video,
+                start_frame=start_frame,
+                end_frame=end_frame,
+                output_path=output_path,
+                output_fps=output_fps,
+                analysis_fps=analysis_fps
+            )
+            
+            if success:
+                cluster_stats['extracted'] += 1
+                stats['extracted'] += 1
+            else:
+                cluster_stats['failed'] += 1
+                stats['failed'] += 1
+        
+        stats['clusters'][cluster_id] = cluster_stats
+        print(f"  Extracted: {cluster_stats['extracted']}/{cluster_stats['total']}")
+        print()
+    
+    return stats
+
+
 def main():
     """Main entry point for DTW clustering."""
     
@@ -711,6 +885,8 @@ def main():
 
 
 if __name__ == "__main__":
+    import argparse
+    
     try:
         # Import scipy for gesture detection
         from scipy.ndimage import uniform_filter1d
@@ -718,4 +894,65 @@ if __name__ == "__main__":
         print("Error: scipy is required. Install with: pip install scipy")
         sys.exit(1)
     
-    main()
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Gesture clustering and extraction')
+    parser.add_argument(
+        '--extract-clusters',
+        action='store_true',
+        help='Extract video segments organized by cluster from existing manifest'
+    )
+    parser.add_argument(
+        '--manifest',
+        type=str,
+        default=None,
+        help=f'Path to clustering manifest (default: {OUTPUT_DIR}/clustering_manifest.json)'
+    )
+    parser.add_argument(
+        '--output-fps',
+        type=int,
+        default=30,
+        help='Output video FPS for cluster extraction (default: 30)'
+    )
+    
+    args = parser.parse_args()
+    
+    if args.extract_clusters:
+        # Only extract clusters from existing manifest
+        print("=" * 70)
+        print("GESTURE VIDEO EXTRACTION FROM CLUSTERING RESULTS")
+        print("=" * 70)
+        print()
+        
+        try:
+            stats = extract_clusters_from_manifest(
+                manifest_path=args.manifest,
+                output_fps=args.output_fps
+            )
+            
+            # Print final summary
+            print("=" * 70)
+            print("EXTRACTION COMPLETE")
+            print("=" * 70)
+            print(f"\nTotal gestures: {stats['total_gestures']}")
+            print(f"Successfully extracted: {stats['extracted']}")
+            print(f"Failed: {stats['failed']}")
+            print()
+            
+            # Print cluster breakdown
+            print("Cluster Breakdown:")
+            for cluster_id, cluster_stats in stats['clusters'].items():
+                print(f"  Cluster {cluster_id}: {cluster_stats['extracted']}/{cluster_stats['total']} extracted")
+            print()
+            
+            manifest_path = args.manifest or os.path.join(OUTPUT_DIR, 'clustering_manifest.json')
+            output_dir = os.path.dirname(manifest_path)
+            print(f"Output directory: {output_dir}")
+            print("Video segments saved in cluster_N/ subdirectories")
+        except FileNotFoundError as e:
+            print(f"Error: {e}")
+            print("Please run 'python run.py' first to generate clustering results.")
+            sys.exit(1)
+    else:
+        # Run full pipeline
+        main()
+

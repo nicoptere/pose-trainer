@@ -5,7 +5,7 @@
 python run.py
 
 # Step 2: Extract video segments (optional, for visualization)
-python extract_cluster.py
+python run.py --extract-clusters
 
 # Step 3: Train classifier on clustered data
 python classification.py
