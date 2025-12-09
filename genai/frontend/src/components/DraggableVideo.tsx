@@ -18,9 +18,10 @@ interface Props {
     onLeave?: () => void;
     onDelete?: () => void;
     color?: string;
+    startTime?: number;
 }
 
-export function DraggableVideo({ id, url, thumbnailUrl, name, width = 80, onClick, onHover, onLeave, onDelete, color }: Props) {
+export function DraggableVideo({ id, url, thumbnailUrl, name, width = 80, onClick, onHover, onLeave, onDelete, color, startTime }: Props) {
     const { attributes, listeners, setNodeRef, transform } = useDraggable({
         id: id,
         data: { type: 'video' }

@@ -99,3 +99,14 @@ when deleting, remove the handles, color area and drag button
 
 1 : update the color area of a subclip on the timeline every time the pointer is up : after relaesing a handle, after releasing the drag button, even if it's not on the button itself.
 2 : a single click on the timeline should select and highlight the subclip beneath the pointer if any, unselect any currently selected clip
+
+
+
+1:add a trashbinb icon next to a class list to delete it, clear the subclips associated with the class on deletion
+2: replace the "close editor" button with a close button ( X ) on the top right of the editor
+3: replace "remove" with a traashbin, "remove" button should remove the video  from the collection, add a warning and ask confirmation
+
+
+classlist: subclips thumbnails preview popup are broken now, fix. you can re=generate on the fly from metadata JSON 
+
+when creating a a subclip on double click, immediately select it

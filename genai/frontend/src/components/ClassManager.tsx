@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import { DndContext, DragOverlay, DragStartEvent, DragEndEvent, useSensor, useSensors, PointerSensor } from '@dnd-kit/core';
-import { Box, Typography, TextField, Paper, InputAdornment, Button, Slider } from '@mui/material';
-import { Search, Add } from '@mui/icons-material';
+import { Box, Typography, TextField, Paper, InputAdornment, Button, Slider, IconButton, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
+import { Search, Add, Close, Delete } from '@mui/icons-material';
 import { useStore } from '../store/useStore';
 import { DroppableClass } from './DroppableClass';
 import { DraggableVideo } from './DraggableVideo';
@@ -13,6 +13,8 @@ export default function ClassManager() {
     const classes = useStore((state) => state.classes);
     const videos = useStore((state) => state.videos);
     const moveVideo = useStore((state) => state.moveVideo);
+    const deleteClass = useStore((state) => state.deleteClass);
+    const deleteRecording = useStore((state) => state.deleteRecording);
 
     const [activeId, setActiveId] = useState<string | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -23,6 +25,7 @@ export default function ClassManager() {
     const [zoomLevel, setZoomLevel] = useState(128);
     const [hoveredVideoId, setHoveredVideoId] = useState<string | null>(null);
     const [hoverPos, setHoverPos] = useState({ x: 0, y: 0 });
+    const [confirmDeleteVideoId, setConfirmDeleteVideoId] = useState<string | null>(null);
 
     const handleVideoHover = (e: React.MouseEvent, id: string) => {
         setHoveredVideoId(id);
@@ -97,19 +100,18 @@ export default function ClassManager() {
                     {/* Video Preview Area / MediaBunny Editor */}
                     <Box sx={{ p: 2, bgcolor: '#000', flex: isEditing ? 1 : '0 0 auto', minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 1, position: 'relative' }}>
                         {isEditing && (
-                            <Button
-                                variant="contained"
+                            <IconButton
                                 color="secondary"
                                 size="small"
-                                sx={{ position: 'absolute', top: 5, right: 5, zIndex: 100 }}
+                                sx={{ position: 'absolute', top: 5, right: 5, zIndex: 100, bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}
                                 onClick={() => {
                                     setIsEditing(false);
                                     setEditingVideoId(null);
                                     setClickedSubclipId(null);
                                 }}
                             >
-                                Close Editor
-                            </Button>
+                                <Close sx={{ color: 'white' }} />
+                            </IconButton>
                         )}
                         {isEditing && editingVideoId ? (
                             <Box sx={{ width: '100%', height: '100%' }}>
@@ -142,9 +144,16 @@ export default function ClassManager() {
                                     }}>
                                         Edit
                                     </Button>
-                                    <Button variant="outlined" size="small" color="error">
-                                        Remove
-                                    </Button>
+                                    <IconButton
+                                        color="error"
+                                        onClick={() => {
+                                            const vid = videos.find(v => v.url === previewUrl);
+                                            if (vid) setConfirmDeleteVideoId(vid.id);
+                                        }}
+                                        title="Delete Video"
+                                    >
+                                        <Delete />
+                                    </IconButton>
                                 </Box>
                             </>
                         ) : (
@@ -243,7 +252,12 @@ export default function ClassManager() {
                             const classVideos = videos.filter(v => v.classId === classId);
 
                             return (
-                                <DroppableClass key={classId} id={classId} title={`${clsName} (${classVideos.length})`}>
+                                <DroppableClass
+                                    key={classId}
+                                    id={classId}
+                                    title={`${clsName} (${classVideos.length})`}
+                                    onDelete={classId !== 'Unsorted' ? deleteClass : undefined}
+                                >
                                     {classVideos.map(video => (
                                         <DraggableVideo
                                             key={video.id}
@@ -253,6 +267,7 @@ export default function ClassManager() {
                                             name={video.name}
                                             width={80}
                                             color={video.color}
+                                            startTime={video.startTime}
                                             onClick={() => {
                                                 setPreviewUrl(video.url);
                                                 if (video.parentVideoId) {
@@ -308,28 +323,30 @@ export default function ClassManager() {
                     overflow: 'hidden'
                 }}>
                     <video
+                        key={hoveredVideoId} // Force remount on change
                         src={hoveredVideoData.url}
                         autoPlay
                         loop
                         muted
-                        ref={el => {
-                            if (el && hoveredVideoData.startTime !== undefined) {
-                                const start = hoveredVideoData.startTime || 0;
-                                // Only loop if we have a defined end time
-                                if (hoveredVideoData.endTime !== undefined) {
-                                    const end = hoveredVideoData.endTime;
-                                    const onTimeUpdate = () => {
-                                        if (el.currentTime >= end) {
-                                            el.currentTime = start;
-                                        }
-                                    };
-                                    el.addEventListener('timeupdate', onTimeUpdate);
-                                } else {
-                                    // Full video, standard loop is fine, but maybe set start time once
-                                    if (el.currentTime < start) el.currentTime = start;
-                                }
+                        onLoadedMetadata={(e) => {
+                            const el = e.currentTarget;
+                            if (hoveredVideoData.startTime !== undefined) {
+                                el.currentTime = hoveredVideoData.startTime;
+                            }
+                        }}
+                        onTimeUpdate={(e) => {
+                            const el = e.currentTarget;
+                            if (hoveredVideoData.startTime !== undefined) {
+                                const start = hoveredVideoData.startTime;
+                                const end = hoveredVideoData.endTime;
 
-                                if (Math.abs(el.currentTime - start) > 0.5 && el.currentTime < start) {
+                                if (end !== undefined) {
+                                    if (el.currentTime >= end) {
+                                        el.currentTime = start;
+                                    }
+                                }
+                                // Safety for seeking back if dragged/started before
+                                if (end !== undefined && el.currentTime < start) {
                                     el.currentTime = start;
                                 }
                             }
@@ -346,6 +363,30 @@ export default function ClassManager() {
                     </Box>
                 </Paper>
             )}
+
+            <Dialog
+                open={!!confirmDeleteVideoId}
+                onClose={() => setConfirmDeleteVideoId(null)}
+            >
+                <DialogTitle>Delete Video?</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Are you sure you want to delete this video? This action cannot be undone.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setConfirmDeleteVideoId(null)}>Cancel</Button>
+                    <Button onClick={() => {
+                        if (confirmDeleteVideoId) {
+                            deleteRecording(confirmDeleteVideoId);
+                            setConfirmDeleteVideoId(null);
+                            setPreviewUrl(null);
+                        }
+                    }} color="error" autoFocus>
+                        Delete
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </DndContext>
     );
 }

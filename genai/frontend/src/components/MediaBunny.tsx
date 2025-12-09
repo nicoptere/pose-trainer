@@ -430,7 +430,19 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                     const thumbnail = captureThumbnail(startTime);
 
                     const color = getRandomColor();
-                    addSubclip(parentVideo, startTime, endTime, color, thumbnail);
+                    const newId = addSubclip(parentVideo, startTime, endTime, color, thumbnail);
+
+                    // Immediately select and edit the new clip
+                    setEditingClipId(newId);
+                    setSelection([startTime, endTime]);
+                    selectionRef.current = [startTime, endTime];
+                    setIsCreating(true);
+
+                    // Ensure UI is synced
+                    if (videoRef.current) {
+                        videoRef.current.currentTime = startTime;
+                        setCurrentTime(startTime);
+                    }
                 }}
             >
                 {/* Existing Clips Markers */}

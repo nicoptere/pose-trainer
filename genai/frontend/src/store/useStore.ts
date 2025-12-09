@@ -33,11 +33,12 @@ interface AppState {
   addClass: (name: string) => void;
   addRecording: (blob: Blob) => void;
   // NEW: Add a virtual subclip
-  addSubclip: (parentVideo: VideoClip, start: number, end: number, color: string, thumbnail: string) => void;
+  addSubclip: (parentVideo: VideoClip, start: number, end: number, color: string, thumbnail: string) => string;
   
   deleteRecording: (id: string) => void;
   moveVideo: (videoId: string, targetClassId: string) => void;
   updateVideo: (id: string, updates: Partial<VideoClip>) => void;
+  deleteClass: (id: string) => void;
 }
 
 export const useStore = create<AppState>()(
@@ -165,7 +166,7 @@ export const useStore = create<AppState>()(
         };
       }),
 
-      addSubclip: (parentVideo, start, end, color, thumbnail) => set((state) => {
+      addSubclip: (parentVideo, start, end, color, thumbnail) => {
           const id = `subclip-${Date.now()}-${Math.random().toString(36).substr(2,9)}`;
           // Subclips default to "Unsorted" (or same class as parent? User said "dragged to classes", implying they start unsorted or user chooses).
           // Let's put them in 'Unsorted' initially so they appear in Inbox, ready to be dragged.
@@ -180,11 +181,24 @@ export const useStore = create<AppState>()(
               thumbnailUrl: thumbnail,
               color: color
           };
-          return { videos: [...state.videos, newClip] };
-      }),
+          set((state) => ({ videos: [...state.videos, newClip] }));
+          return id;
+      },
 
       updateVideo: (id, updates) => set((state) => ({
         videos: state.videos.map(v => v.id === id ? { ...v, ...updates } : v)
+      })),
+
+      deleteClass: (id: string) => set((state) => ({
+        classes: state.classes.filter(c => c.id !== id),
+        videos: state.videos.filter(v => {
+            if (v.classId !== id) return true;
+            // If it's a subclip (has parent), delete it
+            if (v.parentVideoId) return false;
+            // If it's a root video, keep it but unassign
+            v.classId = 'Unsorted'; 
+            return true;
+        })
       })),
 
     }),
