@@ -207,3 +207,7 @@ you removed the wrong scrubber, put back the global one and remove the other one
 
 the scrub bar should be white.
 when clicking on the timeline or on the video payback buttons, the selected thumbnail should stop playing back and relaese the playhead 
+
+put back the trashbin icon in the top right corner of the editor thumbnails 
+
+remove the + button from the editor panel
