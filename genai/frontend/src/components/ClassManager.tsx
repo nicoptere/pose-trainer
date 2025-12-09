@@ -147,7 +147,7 @@ export default function ClassManager() {
                                     style={{ maxWidth: '100%', maxHeight: '300px' }}
                                 />
                                 <Box sx={{ display: 'flex', gap: 1, width: '100%', justifyContent: 'center' }}>
-                                    <Button variant="contained" size="small" color="primary" onClick={() => {
+                                    <Button fullWidth variant="contained" size="small" color="primary" onClick={() => {
                                         const vid = videos.find(v => v.url === previewUrl);
                                         if (vid) {
                                             setIsEditing(true);
@@ -156,16 +156,6 @@ export default function ClassManager() {
                                     }}>
                                         Edit
                                     </Button>
-                                    <IconButton
-                                        color="error"
-                                        onClick={() => {
-                                            const vid = videos.find(v => v.url === previewUrl);
-                                            if (vid) setConfirmDeleteVideoId(vid.id);
-                                        }}
-                                        title="Delete Video"
-                                    >
-                                        <Delete />
-                                    </IconButton>
                                 </Box>
                             </>
                         ) : (
@@ -281,7 +271,6 @@ export default function ClassManager() {
                                             width={80}
                                             color={video.color}
                                             startTime={video.startTime}
-                                            previewDirty={video.previewDirty}
                                             onClick={() => setPreviewUrl(video.url)}
                                             onHover={handleVideoHover}
                                             onLeave={() => setHoveredVideoId(null)}

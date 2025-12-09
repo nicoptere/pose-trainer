@@ -18,10 +18,10 @@ interface Props {
     onDelete?: () => void;
     color?: string;
     startTime?: number;
-    previewDirty?: boolean;
+    // previewDirty removed from props as throbber is removed
 }
 
-export function DraggableVideo({ id, url, thumbnailUrl, name, width = 80, onClick, onHover, onLeave, onDelete, color, startTime, previewDirty }: Props) {
+export function DraggableVideo({ id, url, thumbnailUrl, name, width = 80, onClick, onHover, onLeave, onDelete, color, startTime }: Props) {
     const { attributes, listeners, setNodeRef, transform } = useDraggable({
         id: id,
         data: { type: 'video' }
@@ -68,35 +68,6 @@ export function DraggableVideo({ id, url, thumbnailUrl, name, width = 80, onClic
                         {name}
                     </Typography>
                 </Box>
-
-                {previewDirty && (
-                    <Box sx={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        bgcolor: 'rgba(0,0,0,0.5)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                    }}>
-                        <Box sx={{
-                            width: 16,
-                            height: 16,
-                            border: '2px solid white',
-                            borderTop: '2px solid transparent',
-                            borderRadius: '50%',
-                            animation: 'spin 1s linear infinite'
-                        }} />
-                        <style>{`
-                            @keyframes spin {
-                                0% { transform: rotate(0deg); }
-                                100% { transform: rotate(360deg); }
-                            }
-                         `}</style>
-                    </Box>
-                )}
 
                 {onDelete && (
                     <IconButton
