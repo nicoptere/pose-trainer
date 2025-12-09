@@ -264,8 +264,14 @@ export default function ClassManager() {
                                             onHover={handleVideoHover}
                                             onLeave={() => setHoveredVideoId(null)}
                                             onDelete={() => {
-                                                const deleteRecording = useStore.getState().deleteRecording;
-                                                deleteRecording(video.id);
+                                                if (video.parentVideoId) {
+                                                    // Start/End are defined, it's a subclip. Unassign to show in editor again.
+                                                    useStore.getState().updateVideo(video.id, { classId: 'Unsorted' });
+                                                } else {
+                                                    // Root video in a class: Move back to Unsorted or Delete?
+                                                    // "Remove from class" usually implies unassign.
+                                                    useStore.getState().updateVideo(video.id, { classId: 'Unsorted' });
+                                                }
                                             }}
                                         />
                                     ))}

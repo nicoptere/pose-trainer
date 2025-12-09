@@ -67,3 +67,35 @@ add a (+) button after the class name search list
 remove the panel containing the collections icons : it creates artefacts when dragging
 
 
+update the colored area between handles in editor when user drag the handles
+let user drag the colored area along the timeline to change start frame
+no need for the "accept change " button over the timeline, commit changes everytime the user releases the mouse
+leave a greyed out thumbnail of the subclip in the editor when the subclip is dropped onto a class list
+let subclips thumbnails create new lines when they overflow the editor width
+
+
+
+highlight subclip being edited in white
+add a white horizontal handle of subclip width / 6pix high to drag the subclip range in the timeline if far engough from the handles and hovering the colored area
+remove duplicate close button in editor 
+grey out or alpha fade 50% the thumbnail of the subclip in the editor when the subclip is associated to a class list
+
+
+when removed from the class list, the subclip is 100% visible again in the editor (not greyed out)
+when removed from the EDITOR, the subclip is deleted from the metadata JSON
+a click on the timelien selects a subclip by color
+dragging a subclip's colored area  along the timeline changes its first frame 
+
+
+a click on the thumbnail of a clip unselectes any currently selected clip ,  highlights and edits the clicked subclip
+a click on the timeline selects a subclip by color, if a subclip is selected, unselect it and highlight the clicked subclip
+dragging a subclip's colored area  along the timeline changes its first frame 
+create a tab belolw the selected subclip so that it can be dragged along the timeline 
+
+
+make the drag button fullheight, remove behaviour that sends the handle to the mouseclick on click
+make sure to constantly update the size and position of the color area
+when deleting, remove the handles, color area and drag button
+
+1 : update the color area of a subclip on the timeline every time the pointer is up : after relaesing a handle, after releasing the drag button, even if it's not on the button itself.
+2 : a single click on the timeline should select and highlight the subclip beneath the pointer if any, unselect any currently selected clip

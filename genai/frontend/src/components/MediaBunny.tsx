@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { Box, IconButton, Slider, Typography, Paper } from '@mui/material';
-import { PlayArrow, Pause, Add, Delete, Close, Check } from '@mui/icons-material';
+import { PlayArrow, Pause, Add, Delete } from '@mui/icons-material';
 import { useStore, VideoClip } from '../store/useStore';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
@@ -15,10 +15,10 @@ interface Props {
 }
 
 // Draggable Thumbnail Component for DnD-Kit integration
-function DraggableSubclipThumbnail({ clip, onDelete }: { clip: VideoClip, onDelete: (id: string) => void }) {
+function DraggableSubclipThumbnail({ clip, onDelete, onSelect, isEditing }: { clip: VideoClip, onDelete: (id: string) => void, onSelect: (id: string) => void, isEditing: boolean }) {
     // Prefix ID to avoid conflict with ClassManager draggables
     const draggableId = `editor-${clip.id}`;
-    const { attributes, listeners, setNodeRef, transform } = useDraggable({
+    const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
         id: draggableId,
         data: {
             type: 'Video',
@@ -27,8 +27,11 @@ function DraggableSubclipThumbnail({ clip, onDelete }: { clip: VideoClip, onDele
         }
     });
 
+    const isAssigned = clip.classId && clip.classId !== 'Unsorted';
+
     const style = {
         transform: CSS.Translate.toString(transform),
+        opacity: isDragging ? 0.3 : (isAssigned ? 0.5 : 1), // Ghost effect or dimmed if assigned
     };
 
     return (
@@ -37,8 +40,10 @@ function DraggableSubclipThumbnail({ clip, onDelete }: { clip: VideoClip, onDele
             style={style}
             {...listeners}
             {...attributes}
+            onClick={() => onSelect(clip.id)}
             sx={{
-                minWidth: 100, height: 80,
+                width: 100, // Fixed width for wrap
+                height: 80,
                 bgcolor: clip.color || '#444',
                 display: 'flex',
                 flexDirection: 'column',
@@ -48,8 +53,9 @@ function DraggableSubclipThumbnail({ clip, onDelete }: { clip: VideoClip, onDele
                 cursor: 'grab',
                 overflow: 'hidden',
                 p: 0.5,
-                border: '1px solid #666',
-                flexShrink: 0
+                border: isEditing ? '2px solid white' : '1px solid #666',
+                flexShrink: 0,
+                m: 0.5 // Margin for wrap spacing
             }}
         >
             {clip.thumbnailUrl ? (
@@ -92,9 +98,18 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
     const [duration, setDuration] = useState(0);
 
     // New Clip / Edit State
-    const [isCreating, setIsCreating] = useState(false); // Used for both creating and editing
-    const [editingClipId, setEditingClipId] = useState<string | null>(null); // If set, we are updating this clip
+    const [isCreating, setIsCreating] = useState(false);
+    const [editingClipId, setEditingClipId] = useState<string | null>(null);
     const [selection, setSelection] = useState<number[]>([0, 0]); // Start, End
+
+    // Refs for stable access in event listeners
+    const selectionRef = useRef<number[]>([0, 0]);
+    const isDraggingRef = useRef(false);
+
+    // Sync Ref with State
+    useEffect(() => {
+        selectionRef.current = selection;
+    }, [selection]);
 
     // Initialize Edit Mode if activeSubclipId provided
     useEffect(() => {
@@ -102,7 +117,9 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
             const clip = existingSubclips.find(c => c.id === activeSubclipId);
             if (clip && clip.startTime !== undefined) {
                 setEditingClipId(clip.id);
-                setSelection([clip.startTime, clip.endTime || clip.startTime + 5.0]);
+                const newSel = [clip.startTime, clip.endTime || clip.startTime + 5.0];
+                setSelection(newSel);
+                selectionRef.current = newSel;
                 setIsCreating(true);
                 // Also seek to start
                 if (videoRef.current) {
@@ -111,7 +128,7 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                 }
             }
         }
-    }, [activeSubclipId, existingSubclips.length]); // Dependency on length ensures we check after load
+    }, [activeSubclipId, existingSubclips.length]);
 
     // Timeline Hover State
     const [timelineHoverTime, setTimelineHoverTime] = useState<number | null>(null);
@@ -137,8 +154,10 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
         if (!videoRef.current) return;
         setEditingClipId(null); // Clear editing mode
         const start = videoRef.current.currentTime;
-        const end = Math.min(start + 5.0, duration); // Default 5s
-        setSelection([start, end]);
+        const end = Math.min(start + 5.0, duration);
+        const newSel = [start, end];
+        setSelection(newSel);
+        selectionRef.current = newSel;
         setIsCreating(true);
         videoRef.current.pause();
         setIsPlaying(false);
@@ -155,36 +174,45 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
         return canvas.toDataURL('image/jpeg', 0.7);
     };
 
-    const handleSaveClip = async () => {
-        if (!parentVideo || !videoRef.current) return;
-
-        // Capture thumbnail at NEW start time
-        videoRef.current.currentTime = selection[0];
-        await new Promise(r => setTimeout(r, 200));
-        const thumbnail = captureThumbnail(selection[0]);
-
-        if (editingClipId) {
-            // Update Existing
-            updateVideo(editingClipId, {
-                startTime: selection[0],
-                endTime: selection[1],
-                thumbnailUrl: thumbnail // Update thumbnail too as start time changed
-            });
-            setEditingClipId(null);
-        } else {
-            // Create New
-            const color = getRandomColor();
-            addSubclip(parentVideo, selection[0], selection[1], color, thumbnail);
-        }
-        setIsCreating(false);
-    };
-
     const getRandomColor = () => {
         const hue = Math.floor(Math.random() * 360);
         return `hsl(${hue}, 70%, 60%)`;
     };
 
+    // Consolidated Commit Function
+    const commitChanges = async () => {
+        if (!parentVideo || !videoRef.current) return;
+
+        // Use REF for latest selection values during drag ending
+        const currentSelection = selectionRef.current;
+
+        // Use current selection start for thumbnail
+        videoRef.current.currentTime = currentSelection[0];
+
+        // Wait minor delay for seek
+        await new Promise(r => setTimeout(r, 50));
+        const thumbnail = captureThumbnail(currentSelection[0]);
+
+        if (editingClipId) {
+            updateVideo(editingClipId, {
+                startTime: currentSelection[0],
+                endTime: currentSelection[1],
+                thumbnailUrl: thumbnail
+            });
+            // We stay in edit mode
+        } else {
+            // Create New
+            const color = getRandomColor();
+            addSubclip(parentVideo, currentSelection[0], currentSelection[1], color, thumbnail);
+            setIsCreating(false);
+        }
+    };
+
     const handleDeleteClip = (id: string) => {
+        if (id === editingClipId) {
+            setEditingClipId(null);
+            setIsCreating(false);
+        }
         deleteRecording(id);
     };
 
@@ -193,6 +221,127 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
         if (videoRef.current) {
             videoRef.current.currentTime = time;
             setCurrentTime(time);
+        }
+    };
+
+    // Track Drag & Resize Logic
+    const [dragMode, setDragMode] = useState<'move' | 'resize-start' | 'resize-end' | null>(null);
+    const [dragStartX, setDragStartX] = useState<number | null>(null);
+    const [initialSelection, setInitialSelection] = useState<number[] | null>(null);
+    const timelineRef = useRef<HTMLDivElement>(null);
+
+    const handleDragStart = (e: React.PointerEvent, mode: 'move' | 'resize-start' | 'resize-end') => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragMode(mode);
+        setDragStartX(e.clientX);
+        setInitialSelection([...selection]);
+        isDraggingRef.current = true;
+    };
+
+    useEffect(() => {
+        const handlePointerMove = (e: PointerEvent) => {
+            if (!dragMode || dragStartX === null || !initialSelection || !timelineRef.current) return;
+
+            const rect = timelineRef.current.getBoundingClientRect();
+            const deltaX = e.clientX - dragStartX;
+            const deltaTime = (deltaX / rect.width) * duration;
+
+            let [newStart, newEnd] = initialSelection;
+
+            if (dragMode === 'move') {
+                newStart += deltaTime;
+                newEnd += deltaTime;
+                if (newStart < 0) {
+                    newEnd -= newStart;
+                    newStart = 0;
+                }
+                if (newEnd > duration) {
+                    newStart -= (newEnd - duration);
+                    newEnd = duration;
+                }
+            } else if (dragMode === 'resize-start') {
+                newStart += deltaTime;
+                if (newStart < 0) newStart = 0;
+                if (newStart > newEnd - 0.1) newStart = newEnd - 0.1;
+            } else if (dragMode === 'resize-end') {
+                newEnd += deltaTime;
+                if (newEnd > duration) newEnd = duration;
+                if (newEnd < newStart + 0.1) newEnd = newStart + 0.1;
+            }
+
+            // Secondary clamp safety
+            newStart = Math.max(0, newStart);
+            newEnd = Math.min(newEnd, duration);
+
+            setSelection([newStart, newEnd]);
+            selectionRef.current = [newStart, newEnd];
+
+            if (videoRef.current) {
+                const targetTime = dragMode === 'resize-end' ? newEnd : newStart;
+                if (Math.abs(videoRef.current.currentTime - targetTime) > 0.1) {
+                    videoRef.current.currentTime = targetTime;
+                }
+            }
+        };
+
+        const handlePointerUp = () => {
+            if (dragMode) {
+                setDragMode(null);
+                setDragStartX(null);
+                setInitialSelection(null);
+
+                // Ensure we commit the FINAL ref value
+                commitChanges();
+
+                // Reset drag flag slightly later to prevent click conflicts immediately
+                setTimeout(() => {
+                    isDraggingRef.current = false;
+                }, 100);
+            }
+        };
+
+        if (dragMode) {
+            window.addEventListener('pointermove', handlePointerMove);
+            window.addEventListener('pointerup', handlePointerUp);
+        }
+        return () => {
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', handlePointerUp);
+        };
+    }, [dragMode, dragStartX, initialSelection, duration]); // commitChanges omitted for stability
+
+    // Timeline Click Handler
+    const handleTimelineClick = (e: React.MouseEvent) => {
+        if (isDraggingRef.current) return;
+
+        // Only if clicked directly on the timeline (or bubbled up from markers who didn't stop propagation? Markers DO stop prop)
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const clickTime = (x / rect.width) * duration;
+
+        // Find if we clicked on an existing clip
+        // We iterate in reverse to find the "topmost" if overlap (though usually they are equal z)
+        const clickedClip = [...existingSubclips].reverse().find(clip =>
+            clip.startTime !== undefined && clip.endTime !== undefined &&
+            clickTime >= clip.startTime && clickTime <= clip.endTime
+        );
+
+        if (clickedClip && clickedClip.startTime !== undefined && clickedClip.endTime !== undefined) {
+            setEditingClipId(clickedClip.id);
+            setSelection([clickedClip.startTime, clickedClip.endTime]);
+            selectionRef.current = [clickedClip.startTime, clickedClip.endTime];
+            setIsCreating(true);
+        } else {
+            // Clicked empty space - deselect
+            setEditingClipId(null);
+            setIsCreating(false);
+
+            // Also Seek
+            if (videoRef.current) {
+                videoRef.current.currentTime = clickTime;
+                setCurrentTime(clickTime);
+            }
         }
     };
 
@@ -206,7 +355,7 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
         if (hoveredClip && previewVideoRef.current && videoRef.current && hoveredClip.startTime !== undefined) {
             const start = hoveredClip.startTime;
             previewVideoRef.current.currentTime = start;
-            previewVideoRef.current.playbackRate = 2.0; // 2x speed requested
+            previewVideoRef.current.playbackRate = 2.0;
             previewVideoRef.current.play().catch(() => { });
         }
     }, [hoveredClip]);
@@ -215,19 +364,11 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
     useEffect(() => {
         if (timelineHoverTime !== null && timelinePreviewRef.current) {
             timelinePreviewRef.current.currentTime = timelineHoverTime;
-            // Seek only
         }
     }, [timelineHoverTime]);
 
     return (
         <Box sx={{ p: 2, bgcolor: '#000', color: 'white', borderRadius: 2, position: 'relative' }}>
-            <IconButton
-                onClick={onClose}
-                sx={{ position: 'absolute', top: 5, right: 5, color: 'white', zIndex: 100, bgcolor: 'rgba(0,0,0,0.5)' }}
-                size="small"
-            >
-                <Close />
-            </IconButton>
 
             {/* Main Player */}
             <video
@@ -264,7 +405,9 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
 
             {/* Timeline Editor Zone */}
             <Box
+                ref={timelineRef}
                 sx={{ position: 'relative', height: 60, mt: 2, bgcolor: '#222', borderRadius: 1, overflow: 'hidden', cursor: 'pointer' }}
+                onClick={handleTimelineClick}
                 onMouseMove={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
                     const x = e.clientX - rect.left;
@@ -279,7 +422,7 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                     const rect = e.currentTarget.getBoundingClientRect();
                     const x = e.clientX - rect.left;
                     const startTime = (x / rect.width) * duration;
-                    const endTime = Math.min(startTime + 5.0, duration); // Default 5s
+                    const endTime = Math.min(startTime + 5.0, duration);
 
                     // Capture thumbnail
                     videoRef.current.currentTime = startTime;
@@ -302,20 +445,20 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                                 height: '100%',
                                 bgcolor: clip.color || 'gray',
                                 opacity: 0.6,
-                                border: editingClipId === clip.id ? '2px solid white' : 'none', // Highlight editing clip
+                                border: editingClipId === clip.id ? '2px solid white' : 'none',
+                                boxSizing: 'border-box',
                                 borderLeft: '2px solid rgba(0,0,0,0.5)',
                                 borderRight: '2px solid rgba(0,0,0,0.5)',
-                                cursor: 'move'
+                                cursor: 'pointer',
+                                pointerEvents: isCreating ? 'none' : 'auto'
                             }}
                             onMouseDown={(e) => {
                                 e.stopPropagation();
-                                // Trigger edit on click/drag start?
-                                // For now, let's just allow clicking to edit
                                 setEditingClipId(clip.id);
                                 setSelection([clip.startTime!, clip.endTime!]);
+                                selectionRef.current = [clip.startTime!, clip.endTime!];
                                 setIsCreating(true);
                             }}
-                            /* Hover Logic for Preview */
                             onMouseEnter={(e) => {
                                 setHoveredClip(clip);
                                 setHoverPosition({ x: e.clientX, y: e.clientY - 150 });
@@ -325,48 +468,100 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                     )
                 ))}
 
-                {/* Active Creation Zone */}
+                {/* Active Creation Zone (Overlay) */}
                 {isCreating && (
                     <Box sx={{
                         position: 'absolute',
                         left: 0, right: 0, top: 0, bottom: 0,
-                        zIndex: 10
+                        zIndex: 10,
+                        pointerEvents: 'none'
                     }}>
-                        <Slider
+                        {/* Selected Area - Full Height */}
+                        <Box
                             sx={{
-                                position: 'absolute', top: 20, width: '100%',
-                                '& .MuiSlider-thumb': { borderRadius: 1, width: 4, height: 20 },
-                                '& .MuiSlider-track': { height: 40, top: -18, opacity: 0.5, bgcolor: editingClipId ? 'orange' : 'yellow' },
-                                '& .MuiSlider-valueLabel': { fontSize: '0.6rem', padding: '2px 4px' }
+                                position: 'absolute',
+                                left: `${(selection[0] / duration) * 100}%`,
+                                width: `${((selection[1] - selection[0]) / duration) * 100}%`,
+                                top: 0,
+                                bottom: 0,
+                                bgcolor: editingClipId ? 'rgba(255, 165, 0, 0.4)' : 'rgba(255, 255, 0, 0.4)',
+                                border: '2px solid white',
+                                boxSizing: 'border-box',
+                                pointerEvents: 'auto',
+                                cursor: dragMode === 'move' ? 'grabbing' : 'grab',
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center'
                             }}
-                            min={0}
-                            max={duration}
-                            value={selection}
-                            onChange={(e, val) => setSelection(val as number[])}
-                            valueLabelDisplay="on"
-                            valueLabelFormat={formatTime}
-                        />
-                        <Box sx={{ position: 'absolute', right: 5, top: 5, display: 'flex', gap: 1 }}>
-                            <IconButton size="small" onClick={handleSaveClip} sx={{ bgcolor: 'white', '&:hover': { bgcolor: 'primary.light' } }}>
-                                {editingClipId ? <Check fontSize="small" color="success" /> : <Add fontSize="small" color="primary" />}
-                            </IconButton>
+                            onPointerDown={(e) => handleDragStart(e, 'move')}
+                        >
+                            <Box sx={{ width: 40, height: 4, bgcolor: 'rgba(255,255,255,0.5)', borderRadius: 2 }} />
+                        </Box>
+
+                        {/* Resume Left Handle (Start) */}
+                        <Box
+                            onPointerDown={(e) => handleDragStart(e, 'resize-start')}
+                            sx={{
+                                position: 'absolute',
+                                left: `calc(${(selection[0] / duration) * 100}% - 10px)`,
+                                width: 20,
+                                top: 0, bottom: 0,
+                                cursor: 'ew-resize',
+                                zIndex: 12,
+                                pointerEvents: 'auto',
+                                display: 'flex', justifyContent: 'center', alignItems: 'center',
+                                '&:hover > div': { bgcolor: 'white' }
+                            }}
+                        >
+                            <Box sx={{ width: 4, height: '60%', bgcolor: 'rgba(255,255,255,0.7)', borderRadius: 1 }} />
+                        </Box>
+
+                        {/* Resume Right Handle (End) */}
+                        <Box
+                            onPointerDown={(e) => handleDragStart(e, 'resize-end')}
+                            sx={{
+                                position: 'absolute',
+                                left: `calc(${(selection[1] / duration) * 100}% - 10px)`,
+                                width: 20,
+                                top: 0, bottom: 0,
+                                cursor: 'ew-resize',
+                                zIndex: 12,
+                                pointerEvents: 'auto',
+                                display: 'flex', justifyContent: 'center', alignItems: 'center',
+                                '&:hover > div': { bgcolor: 'white' }
+                            }}
+                        >
+                            <Box sx={{ width: 4, height: '60%', bgcolor: 'rgba(255,255,255,0.7)', borderRadius: 1 }} />
                         </Box>
                     </Box>
                 )}
             </Box>
 
-            {/* Clip List Below - Draggable to Classes */}
-            <Box sx={{ display: 'flex', gap: 1, mt: 2, overflowX: 'auto', pb: 1 }}>
+            {/* Clip List Below */}
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 2, pb: 1 }}>
                 {existingSubclips.map(clip => (
                     <DraggableSubclipThumbnail
                         key={clip.id}
                         clip={clip}
                         onDelete={handleDeleteClip}
+                        onSelect={(id) => {
+                            setEditingClipId(id);
+                            if (clip.startTime !== undefined && clip.endTime !== undefined) {
+                                setSelection([clip.startTime, clip.endTime]);
+                                selectionRef.current = [clip.startTime, clip.endTime];
+                                setIsCreating(true);
+                                if (videoRef.current) {
+                                    videoRef.current.currentTime = clip.startTime;
+                                    setCurrentTime(clip.startTime);
+                                }
+                            }
+                        }}
+                        isEditing={editingClipId === clip.id}
                     />
                 ))}
             </Box>
 
-            {/* Floating Preview Window (Clip Rollover) */}
+            {/* Floating Preview Window */}
             {hoveredClip && hoveredClip.startTime !== undefined && (
                 <Paper sx={{
                     position: 'fixed',
@@ -397,7 +592,7 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                 </Paper>
             )}
 
-            {/* Frame Preview Window (Timeline Hover) */}
+            {/* Frame Preview Window */}
             {timelineHoverTime !== null && (
                 <Paper sx={{
                     position: 'fixed',
