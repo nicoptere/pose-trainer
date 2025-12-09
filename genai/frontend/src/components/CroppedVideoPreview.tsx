@@ -102,8 +102,16 @@ export default function CroppedVideoPreview({
     }
 
     // CSS-based cropping: scale video up and position it so the crop region fills the container
+    // Scale factor: how much bigger the full video is compared to the container
     const scaleX = 1 / effectiveCrop.width;
     const scaleY = 1 / effectiveCrop.height;
+
+    // Position: offset the video so the crop region aligns with container origin
+    // The crop starts at (crop.x * videoWidth) in the original video
+    // After scaling by scaleX, this position becomes (crop.x * scaleX * containerWidth)
+    // We need to move it left by that amount
+    const offsetX = -(effectiveCrop.x / effectiveCrop.width) * 100;
+    const offsetY = -(effectiveCrop.y / effectiveCrop.height) * 100;
 
     return (
         <Box sx={{ bgcolor: 'black', border: `2px solid ${color}`, overflow: 'hidden' }}>
@@ -124,9 +132,9 @@ export default function CroppedVideoPreview({
                         position: 'absolute',
                         width: `${scaleX * 100}%`,
                         height: `${scaleY * 100}%`,
-                        left: `${-effectiveCrop.x * scaleX * 100}%`,
-                        top: `${-effectiveCrop.y * scaleY * 100}%`,
-                        objectFit: 'cover'
+                        left: `${offsetX}%`,
+                        top: `${offsetY}%`,
+                        objectFit: 'fill'
                     }}
                 />
             </Box>

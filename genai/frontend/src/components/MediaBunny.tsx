@@ -571,7 +571,7 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
             {/* Main Player Container with Crop Overlay */}
             <Box
                 ref={videoContainerRef}
-                sx={{ position: 'relative', display: 'inline-block', width: '100%', maxHeight: 300, bgcolor: '#111' }}
+                sx={{ position: 'relative', display: 'inline-block', width: '100%', bgcolor: '#111' }}
                 onPointerDown={handleCropPointerDown}
                 onPointerMove={handleCropPointerMove}
                 onPointerUp={handleCropPointerUp}
@@ -581,7 +581,7 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                 <video
                     ref={videoRef}
                     src={videoUrl}
-                    style={{ width: '100%', height: '100%', display: 'block', maxHeight: 300, objectFit: 'contain' }}
+                    style={{ width: '100%', height: 'auto', display: 'block' }}
                     onTimeUpdate={handleTimeUpdate}
                     onLoadedMetadata={handleLoadedMetadata}
                     onEnded={() => setIsPlaying(false)}
