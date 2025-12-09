@@ -141,3 +141,8 @@ the hover video preview generation on the classlist thumbnails  doesn't work any
 fix
 
 the previews are still black but seem to have the good aspect ratio, make them fit in a 200px box but mostly, make them work
+
+the classlist items hover preview is completely broken,
+ review carefully, and fix, create a seaparte class if it helps, take the subclip rect into account display in a 200px max box with aspect ratio
+
+ preview is still black, when dropping a subclip onto the classlit panel, use mediabunny to extract and reframe a shortclip at 2x speed , display the short clip in   a the preview div

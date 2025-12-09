@@ -8,6 +8,7 @@ import { useStore } from '../store/useStore';
 import { DroppableClass } from './DroppableClass';
 import { DraggableVideo } from './DraggableVideo';
 import MediaBunny from './MediaBunny';
+import CroppedVideoPreview from './CroppedVideoPreview';
 
 export default function ClassManager() {
     const classes = useStore((state) => state.classes);
@@ -315,62 +316,18 @@ export default function ClassManager() {
                     position: 'fixed',
                     left: hoverPos.x + 20,
                     top: hoverPos.y,
-                    width: 200,
                     zIndex: 9999,
                     pointerEvents: 'none',
-                    bgcolor: 'black',
-                    border: '1px solid white',
                     overflow: 'hidden'
                 }}>
-                    <Box sx={{ maxWidth: 250, maxHeight: 200, overflow: 'hidden', position: 'relative', bgcolor: 'black' }}>
-                        <video
-                            key={hoveredVideoId} // Force remount on change
-                            src={hoveredVideoData.url}
-                            autoPlay
-                            loop
-                            muted
-                            onLoadedMetadata={(e) => {
-                                const el = e.currentTarget;
-                                if (hoveredVideoData.startTime !== undefined) {
-                                    el.currentTime = hoveredVideoData.startTime;
-                                }
-                            }}
-                            onTimeUpdate={(e) => {
-                                const el = e.currentTarget;
-                                if (hoveredVideoData.startTime !== undefined) {
-                                    const start = hoveredVideoData.startTime;
-                                    const end = hoveredVideoData.endTime;
-
-                                    if (end !== undefined) {
-                                        if (el.currentTime >= end) {
-                                            el.currentTime = start;
-                                        }
-                                    }
-                                    if (end !== undefined && el.currentTime < start) {
-                                        el.currentTime = start;
-                                    }
-                                }
-                            }}
-                            style={hoveredVideoData.crop && hoveredVideoData.crop.width < 1 ? {
-                                display: 'block',
-                                maxWidth: 250,
-                                transformOrigin: '0 0',
-                                transform: `scale(${1 / hoveredVideoData.crop.width}) translate(-${hoveredVideoData.crop.x * 100}%, -${hoveredVideoData.crop.y * 100}%)`
-                            } : {
-                                display: 'block',
-                                maxWidth: 250,
-                                maxHeight: 200
-                            }}
-                        />
-                    </Box>
-                    <Box sx={{ p: 0.5, bgcolor: 'rgba(0,0,0,0.8)' }}>
-                        <Typography variant="caption" color="white">
-                            {hoveredVideoData.startTime !== undefined
-                                ? `${formatTime(hoveredVideoData.startTime)} - ${hoveredVideoData.endTime !== undefined ? formatTime(hoveredVideoData.endTime) : 'End'}`
-                                : formatTime(0)
-                            }
-                        </Typography>
-                    </Box>
+                    <CroppedVideoPreview
+                        videoUrl={hoveredVideoData.url}
+                        startTime={hoveredVideoData.startTime}
+                        endTime={hoveredVideoData.endTime}
+                        crop={hoveredVideoData.crop}
+                        maxWidth={200}
+                        color={hoveredVideoData.color}
+                    />
                 </Paper>
             )}
 

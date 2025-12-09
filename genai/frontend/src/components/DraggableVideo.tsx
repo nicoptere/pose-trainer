@@ -39,17 +39,18 @@ export function DraggableVideo({ id, url, thumbnailUrl, name, width = 80, onClic
             {...listeners}
             {...attributes}
             onClick={onClick}
-            onMouseEnter={(e) => onHover?.(e, id)}
-            onMouseLeave={onLeave}
         >
-            <Card sx={{
-                width: width,
-                m: 0.5,
-                boxShadow: 1,
-                position: 'relative',
-                border: color ? `2px solid ${color}` : 'none',
-                '&:hover .delete-btn': { opacity: 1 }
-            }}>
+            <Card
+                onMouseEnter={(e) => onHover?.(e, id)}
+                onMouseLeave={onLeave}
+                sx={{
+                    width: width,
+                    m: 0.5,
+                    boxShadow: 1,
+                    position: 'relative',
+                    border: color ? `2px solid ${color}` : 'none',
+                    '&:hover .delete-btn': { opacity: 1 }
+                }}>
                 {thumbnailUrl ? (
                     <CardMedia
                         component="img"
