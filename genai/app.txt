@@ -60,3 +60,10 @@ recompute subclip preview on the fly when rolling over a subclip in the class li
 rename 'inbox" to "collection", move thumbnail size to the bottom of the panel.
 UI in the class list, a click on the subclip should open the parent video in the editor.
 add a trashbin icon to the subclip in the classlist
+
+
+classes disappeared : fix
+add a (+) button after the class name search list
+remove the panel containing the collections icons : it creates artefacts when dragging
+
+

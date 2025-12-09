@@ -37,7 +37,7 @@ interface AppState {
   
   deleteRecording: (id: string) => void;
   moveVideo: (videoId: string, targetClassId: string) => void;
-  // updateSubclips removed in favor of addSubclip logic
+  updateVideo: (id: string, updates: Partial<VideoClip>) => void;
 }
 
 export const useStore = create<AppState>()(
@@ -123,6 +123,41 @@ export const useStore = create<AppState>()(
       })),
 
       moveVideo: (videoId, targetClassId) => set((state) => {
+        const video = state.videos.find(v => v.id === videoId);
+        if (!video) return {};
+
+        // 1. If it's a subclip, just move/reassign it
+        if (video.parentVideoId) {
+            return {
+                videos: state.videos.map(v => 
+                    v.id === videoId ? { ...v, classId: targetClassId } : v
+                )
+            };
+        }
+
+        // 2. If it's a Source Video being "moved" to a Class (creating a reference/subclip)
+        // And we ensure we aren't just moving it back to Unsorted (which does nothing for source videos usually, or reorders)
+        if (targetClassId !== 'Unsorted') {
+             const newSubclipId = `subclip-${Date.now()}-${Math.random().toString(36).substr(2,9)}`;
+             const newClip: VideoClip = {
+                  id: newSubclipId,
+                  name: `${video.name} (Full)`,
+                  url: video.url,
+                  classId: targetClassId,
+                  parentVideoId: video.id, // Reference the source
+                  startTime: 0,
+                  endTime: undefined, // Indicates full length
+                  thumbnailUrl: video.thumbnailUrl,
+                  color: video.color || '#666'
+             };
+             // Keep the original video in Unsorted, add the new clip to the target class
+             return {
+                 videos: [...state.videos, newClip]
+             };
+        }
+
+        // 3. If dragging source video within Unsorted or back to Unsorted? 
+        // Just Update classId (which is already Unsorted, but maybe we support other folders later)
         return {
           videos: state.videos.map(v => 
             v.id === videoId ? { ...v, classId: targetClassId } : v
@@ -147,6 +182,10 @@ export const useStore = create<AppState>()(
           };
           return { videos: [...state.videos, newClip] };
       }),
+
+      updateVideo: (id, updates) => set((state) => ({
+        videos: state.videos.map(v => v.id === id ? { ...v, ...updates } : v)
+      })),
 
     }),
     {

@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { Box, IconButton, Slider, Typography, Paper } from '@mui/material';
-import { PlayArrow, Pause, Add, Delete, Close } from '@mui/icons-material';
+import { PlayArrow, Pause, Add, Delete, Close, Check } from '@mui/icons-material';
 import { useStore, VideoClip } from '../store/useStore';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
@@ -11,15 +11,19 @@ interface Props {
     videoUrl: string;
     videoId: string;
     onClose: () => void;
+    activeSubclipId?: string | null;
 }
 
 // Draggable Thumbnail Component for DnD-Kit integration
 function DraggableSubclipThumbnail({ clip, onDelete }: { clip: VideoClip, onDelete: (id: string) => void }) {
+    // Prefix ID to avoid conflict with ClassManager draggables
+    const draggableId = `editor-${clip.id}`;
     const { attributes, listeners, setNodeRef, transform } = useDraggable({
-        id: clip.id,
+        id: draggableId,
         data: {
             type: 'Video',
-            clip // Pass clip data so droppable knows what it is (if needed, though ID lookup is standard)
+            clip,
+            originalId: clip.id // Pass original ID for drop handler
         }
     });
 
@@ -55,7 +59,9 @@ function DraggableSubclipThumbnail({ clip, onDelete }: { clip: VideoClip, onDele
             )}
 
             <Typography variant="caption" sx={{ color: 'white', fontWeight: 'bold', fontSize: '0.7rem' }}>
-                {formatTime((clip.endTime || 0) - (clip.startTime || 0))}s
+                {clip.endTime !== undefined
+                    ? `${formatTime(clip.endTime - (clip.startTime || 0))}s`
+                    : 'Full'}
             </Typography>
 
             <IconButton
@@ -70,8 +76,9 @@ function DraggableSubclipThumbnail({ clip, onDelete }: { clip: VideoClip, onDele
     );
 }
 
-export default function MediaBunny({ videoUrl, videoId, onClose }: Props) {
+export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId }: Props) {
     const addSubclip = useStore(state => state.addSubclip);
+    const updateVideo = useStore(state => state.updateVideo);
     const deleteRecording = useStore(state => state.deleteRecording);
 
     // Get all videos to avoid unstable selector reference
@@ -84,9 +91,27 @@ export default function MediaBunny({ videoUrl, videoId, onClose }: Props) {
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
 
-    // New Clip State
-    const [isCreating, setIsCreating] = useState(false);
+    // New Clip / Edit State
+    const [isCreating, setIsCreating] = useState(false); // Used for both creating and editing
+    const [editingClipId, setEditingClipId] = useState<string | null>(null); // If set, we are updating this clip
     const [selection, setSelection] = useState<number[]>([0, 0]); // Start, End
+
+    // Initialize Edit Mode if activeSubclipId provided
+    useEffect(() => {
+        if (activeSubclipId && existingSubclips.length > 0) {
+            const clip = existingSubclips.find(c => c.id === activeSubclipId);
+            if (clip && clip.startTime !== undefined) {
+                setEditingClipId(clip.id);
+                setSelection([clip.startTime, clip.endTime || clip.startTime + 5.0]);
+                setIsCreating(true);
+                // Also seek to start
+                if (videoRef.current) {
+                    videoRef.current.currentTime = clip.startTime;
+                    setCurrentTime(clip.startTime);
+                }
+            }
+        }
+    }, [activeSubclipId, existingSubclips.length]); // Dependency on length ensures we check after load
 
     // Timeline Hover State
     const [timelineHoverTime, setTimelineHoverTime] = useState<number | null>(null);
@@ -110,8 +135,9 @@ export default function MediaBunny({ videoUrl, videoId, onClose }: Props) {
 
     const handleStartCreation = () => {
         if (!videoRef.current) return;
+        setEditingClipId(null); // Clear editing mode
         const start = videoRef.current.currentTime;
-        const end = Math.min(start + 2.0, duration);
+        const end = Math.min(start + 5.0, duration); // Default 5s
         setSelection([start, end]);
         setIsCreating(true);
         videoRef.current.pause();
@@ -131,11 +157,25 @@ export default function MediaBunny({ videoUrl, videoId, onClose }: Props) {
 
     const handleSaveClip = async () => {
         if (!parentVideo || !videoRef.current) return;
+
+        // Capture thumbnail at NEW start time
         videoRef.current.currentTime = selection[0];
         await new Promise(r => setTimeout(r, 200));
         const thumbnail = captureThumbnail(selection[0]);
-        const color = getRandomColor();
-        addSubclip(parentVideo, selection[0], selection[1], color, thumbnail);
+
+        if (editingClipId) {
+            // Update Existing
+            updateVideo(editingClipId, {
+                startTime: selection[0],
+                endTime: selection[1],
+                thumbnailUrl: thumbnail // Update thumbnail too as start time changed
+            });
+            setEditingClipId(null);
+        } else {
+            // Create New
+            const color = getRandomColor();
+            addSubclip(parentVideo, selection[0], selection[1], color, thumbnail);
+        }
         setIsCreating(false);
     };
 
@@ -233,6 +273,22 @@ export default function MediaBunny({ videoUrl, videoId, onClose }: Props) {
                     setTimelineHoverPos({ x: e.clientX, y: rect.top - 100 });
                 }}
                 onMouseLeave={() => setTimelineHoverTime(null)}
+                // Double Click to create immediate subclip
+                onDoubleClick={async (e) => {
+                    if (!parentVideo || !videoRef.current) return;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const startTime = (x / rect.width) * duration;
+                    const endTime = Math.min(startTime + 5.0, duration); // Default 5s
+
+                    // Capture thumbnail
+                    videoRef.current.currentTime = startTime;
+                    await new Promise(r => setTimeout(r, 200));
+                    const thumbnail = captureThumbnail(startTime);
+
+                    const color = getRandomColor();
+                    addSubclip(parentVideo, startTime, endTime, color, thumbnail);
+                }}
             >
                 {/* Existing Clips Markers */}
                 {existingSubclips.map(clip => (
@@ -246,13 +302,18 @@ export default function MediaBunny({ videoUrl, videoId, onClose }: Props) {
                                 height: '100%',
                                 bgcolor: clip.color || 'gray',
                                 opacity: 0.6,
+                                border: editingClipId === clip.id ? '2px solid white' : 'none', // Highlight editing clip
                                 borderLeft: '2px solid rgba(0,0,0,0.5)',
                                 borderRight: '2px solid rgba(0,0,0,0.5)',
-                                cursor: 'move' // Indicate draggable (though only mocked for now)
+                                cursor: 'move'
                             }}
                             onMouseDown={(e) => {
                                 e.stopPropagation();
-                                alert("Timeline dragging is not yet fully implemented in Store.");
+                                // Trigger edit on click/drag start?
+                                // For now, let's just allow clicking to edit
+                                setEditingClipId(clip.id);
+                                setSelection([clip.startTime!, clip.endTime!]);
+                                setIsCreating(true);
                             }}
                             /* Hover Logic for Preview */
                             onMouseEnter={(e) => {
@@ -275,7 +336,7 @@ export default function MediaBunny({ videoUrl, videoId, onClose }: Props) {
                             sx={{
                                 position: 'absolute', top: 20, width: '100%',
                                 '& .MuiSlider-thumb': { borderRadius: 1, width: 4, height: 20 },
-                                '& .MuiSlider-track': { height: 40, top: -18, opacity: 0.5, bgcolor: 'yellow' },
+                                '& .MuiSlider-track': { height: 40, top: -18, opacity: 0.5, bgcolor: editingClipId ? 'orange' : 'yellow' },
                                 '& .MuiSlider-valueLabel': { fontSize: '0.6rem', padding: '2px 4px' }
                             }}
                             min={0}
@@ -286,7 +347,9 @@ export default function MediaBunny({ videoUrl, videoId, onClose }: Props) {
                             valueLabelFormat={formatTime}
                         />
                         <Box sx={{ position: 'absolute', right: 5, top: 5, display: 'flex', gap: 1 }}>
-                            <IconButton size="small" onClick={handleSaveClip} sx={{ bgcolor: 'white', '&:hover': { bgcolor: 'primary.light' } }}><Add fontSize="small" color="primary" /></IconButton>
+                            <IconButton size="small" onClick={handleSaveClip} sx={{ bgcolor: 'white', '&:hover': { bgcolor: 'primary.light' } }}>
+                                {editingClipId ? <Check fontSize="small" color="success" /> : <Add fontSize="small" color="primary" />}
+                            </IconButton>
                         </Box>
                     </Box>
                 )}

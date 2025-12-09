@@ -1,10 +1,9 @@
-
 'use client';
 
 import React, { useState } from 'react';
 import { DndContext, DragOverlay, DragStartEvent, DragEndEvent, useSensor, useSensors, PointerSensor } from '@dnd-kit/core';
 import { Box, Typography, TextField, Paper, InputAdornment, Button, Slider } from '@mui/material';
-import { Search } from '@mui/icons-material';
+import { Search, Add } from '@mui/icons-material';
 import { useStore } from '../store/useStore';
 import { DroppableClass } from './DroppableClass';
 import { DraggableVideo } from './DraggableVideo';
@@ -19,6 +18,8 @@ export default function ClassManager() {
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [isEditing, setIsEditing] = useState(false);
+    const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
+    const [clickedSubclipId, setClickedSubclipId] = useState<string | null>(null); // To trigger edit mode in MediaBunny
     const [zoomLevel, setZoomLevel] = useState(128);
     const [hoveredVideoId, setHoveredVideoId] = useState<string | null>(null);
     const [hoverPos, setHoverPos] = useState({ x: 0, y: 0 });
@@ -30,7 +31,9 @@ export default function ClassManager() {
 
     const hoveredVideoData = hoveredVideoId ? videos.find(v => v.id === hoveredVideoId) : null;
 
-    const activeVideo = activeId ? videos.find(v => v.id === activeId) : null;
+    // Handle prefixed IDs from MediaBunny draggable
+    const activeVideoIdRaw = activeId ? (activeId.startsWith('editor-') ? activeId.replace('editor-', '') : activeId) : null;
+    const activeVideo = activeVideoIdRaw ? videos.find(v => v.id === activeVideoIdRaw) : null;
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -46,8 +49,11 @@ export default function ClassManager() {
 
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
-        if (over && active.id !== over.id) {
-            moveVideo(active.id as string, over.id as string);
+        // Strip 'editor-' prefix if present from MediaBunny items
+        const rawActiveId = (active.id as string).replace('editor-', '');
+
+        if (over && rawActiveId !== over.id) {
+            moveVideo(rawActiveId, over.id as string);
         }
         setActiveId(null);
     };
@@ -56,7 +62,6 @@ export default function ClassManager() {
     const unsortedVideos = videos.filter(v => (v.classId === 'Unsorted' || !v.classId) && !v.parentVideoId);
 
     // 2. Get Right Panel Classes (Filtered)
-    // Filter out 'Unsorted' from the main class list as it's handled separately on the left
     const definedClasses = classes.filter(c => c.name !== 'Unsorted');
 
     // Apply Search Filter
@@ -64,27 +69,9 @@ export default function ClassManager() {
         c.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // Explicitly add predefined classes if they don't exist in store yet, so they are droppable
-    const predefinedNames = ['Squat', 'JumpingJack', 'Lunge'];
-    // Merge existing filtered classes with missing predefined ones (if they match search)
-    // This logic is a bit complex: we want to show predefined slots even if empty, BUT only if they match search.
-    const displayClasses = [...filteredClasses];
-
-    predefinedNames.forEach(name => {
-        if (!displayClasses.find(c => c.name === name) &&
-            classes.find(c => c.name !== name)) { // If not in store
-            // Actually, the store usually initializes with these. 
-            // Let's rely on the store having them or the logic below to synthesize them if needed.
-            // For simplicity, let's just stick to what's in the store + synthesized ones loop below.
-        }
-    });
-
-    // We will map over a union of store classes and predefined strings to ensure they appear
     const uniqueClassNames = Array.from(new Set([
-        ...filteredClasses.map(c => c.name),
-        ...predefinedNames.filter(n => n.toLowerCase().includes(searchTerm.toLowerCase()))
+        ...filteredClasses.map(c => c.name)
     ]));
-
 
     return (
         <DndContext
@@ -95,15 +82,15 @@ export default function ClassManager() {
             <Box sx={{ display: 'flex', height: '100%', gap: 2 }}>
 
                 {/* --- Left Column: Preview & Unsorted List --- */}
-                {/* Width transitions between 30% and 50% */}
-                <Paper
-                    elevation={3}
+                <Box
                     sx={{
                         width: isEditing ? '50%' : '30%',
                         transition: 'width 0.3s ease',
                         display: 'flex',
                         flexDirection: 'column',
-                        overflow: 'hidden'
+                        // Removed elevation and overflow:hidden to prevent artifacts
+                        borderRight: '1px solid rgba(0,0,0,0.12)',
+                        bgcolor: 'background.paper'
                     }}
                 >
 
@@ -115,17 +102,26 @@ export default function ClassManager() {
                                 color="secondary"
                                 size="small"
                                 sx={{ position: 'absolute', top: 5, right: 5, zIndex: 100 }}
-                                onClick={() => setIsEditing(false)}
+                                onClick={() => {
+                                    setIsEditing(false);
+                                    setEditingVideoId(null);
+                                    setClickedSubclipId(null);
+                                }}
                             >
                                 Close Editor
                             </Button>
                         )}
-                        {isEditing && previewUrl ? (
+                        {isEditing && editingVideoId ? (
                             <Box sx={{ width: '100%', height: '100%' }}>
                                 <MediaBunny
-                                    videoUrl={previewUrl}
-                                    videoId={videos.find(v => v.url === previewUrl)?.id || ''}
-                                    onClose={() => setIsEditing(false)}
+                                    videoUrl={videos.find(v => v.id === editingVideoId)?.url || previewUrl || ''}
+                                    videoId={editingVideoId}
+                                    onClose={() => {
+                                        setIsEditing(false);
+                                        setEditingVideoId(null);
+                                        setClickedSubclipId(null);
+                                    }}
+                                    activeSubclipId={clickedSubclipId}
                                 />
                             </Box>
                         ) : previewUrl ? (
@@ -137,7 +133,13 @@ export default function ClassManager() {
                                     style={{ maxWidth: '100%', maxHeight: '300px' }}
                                 />
                                 <Box sx={{ display: 'flex', gap: 1, width: '100%', justifyContent: 'center' }}>
-                                    <Button variant="contained" size="small" color="primary" onClick={() => setIsEditing(true)}>
+                                    <Button variant="contained" size="small" color="primary" onClick={() => {
+                                        const vid = videos.find(v => v.url === previewUrl);
+                                        if (vid) {
+                                            setIsEditing(true);
+                                            setEditingVideoId(vid.id);
+                                        }
+                                    }}>
                                         Edit
                                     </Button>
                                     <Button variant="outlined" size="small" color="error">
@@ -155,19 +157,8 @@ export default function ClassManager() {
                         <>
                             <Box sx={{ p: 1, bgcolor: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <Typography variant="subtitle1" fontWeight="bold">
-                                    Inbox ({unsortedVideos.length})
+                                    Collection ({unsortedVideos.length})
                                 </Typography>
-                                {/* Zoom Slider */}
-                                <Box sx={{ width: 100, display: 'flex', alignItems: 'center' }}>
-                                    <Slider
-                                        size="small"
-                                        min={64}
-                                        max={512}
-                                        value={zoomLevel}
-                                        onChange={(e, val) => setZoomLevel(val as number)}
-                                        aria-label="Thumbnail Zoom"
-                                    />
-                                </Box>
                             </Box>
 
                             <Box sx={{ flex: 1, overflowY: 'auto', p: 1, display: 'flex', flexWrap: 'wrap', alignContent: 'flex-start' }}>
@@ -180,6 +171,7 @@ export default function ClassManager() {
                                             thumbnailUrl={video.thumbnailUrl}
                                             name={video.name}
                                             width={zoomLevel}
+                                            color={video.color}
                                             onClick={() => setPreviewUrl(video.url)}
                                             onHover={handleVideoHover}
                                             onLeave={() => setHoveredVideoId(null)}
@@ -188,13 +180,25 @@ export default function ClassManager() {
                                     {unsortedVideos.length === 0 && <Typography variant="caption" color="text.secondary">No videos</Typography>}
                                 </DroppableClass>
                             </Box>
+
+                            {/* Zoom Slider at Bottom */}
+                            <Box sx={{ p: 1, borderTop: '1px solid #ddd', display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="caption">Size:</Typography>
+                                <Slider
+                                    size="small"
+                                    min={64}
+                                    max={256}
+                                    value={zoomLevel}
+                                    onChange={(e, val) => setZoomLevel(val as number)}
+                                    aria-label="Thumbnail Zoom"
+                                    sx={{ flex: 1 }}
+                                />
+                            </Box>
                         </>
                     )}
-                </Paper>
-
+                </Box>
 
                 {/* --- Right Column: Search & Classes --- */}
-                {/* Width transitions between 70% and 50% */}
                 <Box sx={{
                     width: isEditing ? '50%' : '70%',
                     transition: 'width 0.3s ease',
@@ -202,30 +206,40 @@ export default function ClassManager() {
                     flexDirection: 'column',
                     gap: 2
                 }}>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <TextField
+                            fullWidth
+                            size="small"
+                            placeholder="Search classes..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <Search />
+                                    </InputAdornment>
+                                ),
+                            }}
+                        />
+                        <Button
+                            variant="outlined"
+                            startIcon={<Add />}
+                            disabled={!searchTerm}
+                            onClick={() => {
+                                if (searchTerm) {
+                                    useStore.getState().addClass(searchTerm);
+                                    setSearchTerm('');
+                                }
+                            }}
+                        >
+                            Add
+                        </Button>
+                    </Box>
 
-                    {/* Search Bar */}
-                    <TextField
-                        fullWidth
-                        size="small"
-                        placeholder="Search classes..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <Search />
-                                </InputAdornment>
-                            ),
-                        }}
-                    />
-
-                    {/* Vertical List of Classes */}
                     <Box sx={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {uniqueClassNames.map(clsName => {
-                            // Resolve ID
                             const realClass = classes.find(c => c.name === clsName);
                             const classId = realClass ? realClass.id : clsName;
-
                             const classVideos = videos.filter(v => v.classId === classId);
 
                             return (
@@ -237,19 +251,29 @@ export default function ClassManager() {
                                             url={video.url}
                                             thumbnailUrl={video.thumbnailUrl}
                                             name={video.name}
-                                            width={80} // Keep standard size for class list?
-                                            onClick={() => setPreviewUrl(video.url)}
+                                            width={80}
+                                            color={video.color}
+                                            onClick={() => {
+                                                setPreviewUrl(video.url);
+                                                if (video.parentVideoId) {
+                                                    setEditingVideoId(video.parentVideoId);
+                                                    setClickedSubclipId(video.id); // Triggers edit mode in MediaBunny
+                                                    setIsEditing(true);
+                                                }
+                                            }}
                                             onHover={handleVideoHover}
                                             onLeave={() => setHoveredVideoId(null)}
+                                            onDelete={() => {
+                                                const deleteRecording = useStore.getState().deleteRecording;
+                                                deleteRecording(video.id);
+                                            }}
                                         />
                                     ))}
                                 </DroppableClass>
                             );
                         })}
                     </Box>
-
                 </Box>
-
             </Box>
 
             <DragOverlay>
@@ -260,11 +284,11 @@ export default function ClassManager() {
                         thumbnailUrl={activeVideo.thumbnailUrl}
                         name={activeVideo.name}
                         width={80}
+                        color={activeVideo.color}
                     />
                 ) : null}
             </DragOverlay>
 
-            {/* Hover Preview Popup */}
             {hoveredVideoData && (
                 <Paper sx={{
                     position: 'fixed',
@@ -282,19 +306,40 @@ export default function ClassManager() {
                         autoPlay
                         loop
                         muted
+                        ref={el => {
+                            if (el && hoveredVideoData.startTime !== undefined) {
+                                const start = hoveredVideoData.startTime || 0;
+                                // Only loop if we have a defined end time
+                                if (hoveredVideoData.endTime !== undefined) {
+                                    const end = hoveredVideoData.endTime;
+                                    const onTimeUpdate = () => {
+                                        if (el.currentTime >= end) {
+                                            el.currentTime = start;
+                                        }
+                                    };
+                                    el.addEventListener('timeupdate', onTimeUpdate);
+                                } else {
+                                    // Full video, standard loop is fine, but maybe set start time once
+                                    if (el.currentTime < start) el.currentTime = start;
+                                }
+
+                                if (Math.abs(el.currentTime - start) > 0.5 && el.currentTime < start) {
+                                    el.currentTime = start;
+                                }
+                            }
+                        }}
                         style={{ width: '100%', display: 'block' }}
                     />
                     <Box sx={{ p: 0.5, bgcolor: 'rgba(0,0,0,0.8)' }}>
                         <Typography variant="caption" color="white">
                             {hoveredVideoData.startTime !== undefined
-                                ? `${formatTime(hoveredVideoData.startTime)} - ${formatTime(hoveredVideoData.endTime || 0)}`
+                                ? `${formatTime(hoveredVideoData.startTime)} - ${hoveredVideoData.endTime !== undefined ? formatTime(hoveredVideoData.endTime) : 'End'}`
                                 : formatTime(0)
                             }
                         </Typography>
                     </Box>
                 </Paper>
             )}
-
         </DndContext>
     );
 }
