@@ -10,7 +10,7 @@ interface Props {
     id: string;
     title: string;
     children: React.ReactNode;
-    onDelete?: (id: string) => void;
+    onDelete?: (id: string) => void | Promise<void>;
 }
 
 export function DroppableClass({ id, title, children, onDelete }: Props) {

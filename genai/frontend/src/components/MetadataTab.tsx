@@ -20,15 +20,27 @@ export default function MetadataTab() {
         classes: classes.map(c => ({
             id: c.id,
             name: c.name,
-            // Only include videos that belong to this class
-            videos: videos
-                .filter(v => v.classId === c.id || (c.id === 'Unsorted' && v.classId === 'Unsorted'))
+            // Get subclips assigned to this class
+            subclips: videos
+                .filter(v => v.classId === c.id && v.parentVideoId) // Only subclips
                 .map(v => ({
-                    filename: v.name,
-                    path: v.id,
-                    subclips: v.subclips
+                    id: v.id,
+                    parentVideoId: v.parentVideoId,
+                    name: v.name,
+                    startTime: v.startTime,
+                    endTime: v.endTime,
+                    crop: v.crop,
+                    color: v.color
                 }))
-        }))
+        })),
+        // Also list source videos
+        sourceVideos: videos
+            .filter(v => !v.parentVideoId) // Only root videos
+            .map(v => ({
+                id: v.id,
+                name: v.name,
+                path: v.url
+            }))
     };
 
     const jsonString = JSON.stringify(exportData, null, 2);

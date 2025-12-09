@@ -31,7 +31,7 @@ interface AppState {
   fetchDataset: () => Promise<void>;
   
   // Actions
-  addClass: (name: string) => void;
+  addClass: (name: string) => Promise<void>;
   addRecording: (blob: Blob) => void;
   // NEW: Add a virtual subclip
   addSubclip: (parentVideo: VideoClip, start: number, end: number, color: string, thumbnail: string, crop?: { x: number, y: number, width: number, height: number }) => string;
@@ -39,7 +39,7 @@ interface AppState {
   deleteRecording: (id: string) => void;
   moveVideo: (videoId: string, targetClassId: string) => void;
   updateVideo: (id: string, updates: Partial<VideoClip>) => void;
-  deleteClass: (id: string) => void;
+  deleteClass: (id: string) => Promise<void>;
 }
 
 export const useStore = create<AppState>()(
@@ -100,9 +100,23 @@ export const useStore = create<AppState>()(
         }
       },
 
-      addClass: (name) => set((state) => ({
-        classes: [...state.classes, { id: name, name, count: 0 }]
-      })),
+      addClass: async (name) => {
+        try {
+          const res = await fetch('/api/classes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+          });
+          const data = await res.json();
+          if (data.success) {
+            set((state) => ({
+              classes: [...state.classes, { id: data.name, name: data.name, count: 0 }]
+            }));
+          }
+        } catch (err) {
+          console.error('Failed to add class:', err);
+        }
+      },
 
       addRecording: (blob) => {
         const url = URL.createObjectURL(blob);
@@ -191,17 +205,27 @@ export const useStore = create<AppState>()(
         videos: state.videos.map(v => v.id === id ? { ...v, ...updates } : v)
       })),
 
-      deleteClass: (id: string) => set((state) => ({
-        classes: state.classes.filter(c => c.id !== id),
-        videos: state.videos.filter(v => {
-            if (v.classId !== id) return true;
-            // If it's a subclip (has parent), delete it
-            if (v.parentVideoId) return false;
-            // If it's a root video, keep it but unassign
-            v.classId = 'Unsorted'; 
-            return true;
-        })
-      })),
+      deleteClass: async (id: string) => {
+        try {
+          const res = await fetch('/api/classes', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: id })
+          });
+          const data = await res.json();
+          if (data.success) {
+            set((state) => ({
+              classes: state.classes.filter(c => c.id !== id),
+              // Unassign all videos from this class to Unsorted
+              videos: state.videos.map(v => 
+                v.classId === id ? { ...v, classId: 'Unsorted' } : v
+              )
+            }));
+          }
+        } catch (err) {
+          console.error('Failed to delete class:', err);
+        }
+      },
 
     }),
     {

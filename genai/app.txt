@@ -146,3 +146,18 @@ the classlist items hover preview is completely broken,
  review carefully, and fix, create a seaparte class if it helps, take the subclip rect into account display in a 200px max box with aspect ratio
 
  preview is still black, when dropping a subclip onto the classlit panel, use mediabunny to extract and reframe a shortclip at 2x speed , display the short clip in   a the preview div
+
+ much better, almost good. there's  still an  offset in the preview, probably due to the video element offset in the container
+
+ ok, instead of setting the a fixed height to the video in the editor, try unsing a 100% width and an uato height
+
+
+update, remove and  add the classes to the JSON metadata.
+unassign subclips when removeing a class 
+
+
+something wen t wrong with the classlit subclip thumbnail preview again.
+may be it's easier to recompute the preview video : when the app loads.
+2 when a clip is finished updating in the editor and the user hovers the thumbnail,
+create a dirty property that will trigger recomputation.
+while the preview isn't recomputed, display a throbber on the classlist thumbnail

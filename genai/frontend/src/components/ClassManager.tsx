@@ -235,9 +235,9 @@ export default function ClassManager() {
                             variant="outlined"
                             startIcon={<Add />}
                             disabled={!searchTerm}
-                            onClick={() => {
+                            onClick={async () => {
                                 if (searchTerm) {
-                                    useStore.getState().addClass(searchTerm);
+                                    await useStore.getState().addClass(searchTerm);
                                     setSearchTerm('');
                                 }
                             }}
