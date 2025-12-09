@@ -161,3 +161,9 @@ may be it's easier to recompute the preview video : when the app loads.
 2 when a clip is finished updating in the editor and the user hovers the thumbnail,
 create a dirty property that will trigger recomputation.
 while the preview isn't recomputed, display a throbber on the classlist thumbnail
+
+
+optimize implementation , replace th classlist thumbnail preview with a canvas:
+the canvas snapshots every frame of the video and stores it in a buffer.
+when the user hovers the thumbnail, the canvas is displayed in the preview div
+the canvas should be updated in real time, so that it matches the video in the editor
