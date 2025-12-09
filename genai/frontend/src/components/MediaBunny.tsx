@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { Box, IconButton, Slider, Typography, Paper } from '@mui/material';
-import { PlayArrow, Pause, Add, Delete } from '@mui/icons-material';
+import { PlayArrow, Pause, Add, Delete, Crop } from '@mui/icons-material';
 import { useStore, VideoClip } from '../store/useStore';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
@@ -102,6 +102,12 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
     const [editingClipId, setEditingClipId] = useState<string | null>(null);
     const [selection, setSelection] = useState<number[]>([0, 0]); // Start, End
 
+    // Crop State
+    const [isCropping, setIsCropping] = useState(false);
+    const [crop, setCrop] = useState<{ x: number, y: number, width: number, height: number } | undefined>(undefined);
+    const cropStartRef = useRef<{ x: number, y: number } | null>(null);
+    const videoContainerRef = useRef<HTMLDivElement>(null);
+
     // Refs for stable access in event listeners
     const selectionRef = useRef<number[]>([0, 0]);
     const isDraggingRef = useRef(false);
@@ -121,6 +127,7 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                 setSelection(newSel);
                 selectionRef.current = newSel;
                 setIsCreating(true);
+                setCrop(clip.crop || undefined); // Load crop or reset
                 // Also seek to start
                 if (videoRef.current) {
                     videoRef.current.currentTime = clip.startTime;
@@ -153,6 +160,7 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
     const handleStartCreation = () => {
         if (!videoRef.current) return;
         setEditingClipId(null); // Clear editing mode
+        setCrop(undefined); // Reset crop
         const start = videoRef.current.currentTime;
         const end = Math.min(start + 5.0, duration);
         const newSel = [start, end];
@@ -166,11 +174,31 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
     const captureThumbnail = (time: number): string => {
         if (!videoRef.current) return '';
         const canvas = document.createElement('canvas');
-        canvas.width = videoRef.current.videoWidth / 4;
-        canvas.height = videoRef.current.videoHeight / 4;
+
+        let sx = 0, sy = 0, sw = videoRef.current.videoWidth, sh = videoRef.current.videoHeight;
+
+        if (crop) {
+            sx = crop.x * sw;
+            sy = crop.y * sh;
+            sw = crop.width * sw;
+            sh = crop.height * sh;
+        }
+
+        // Maintain aspect ratio or fixed size? 
+        // For thumbnails let's keep it simple, just scale down the source region
+        // We want consistent height maybe? Or just 1/4th of source?
+        // If we crop a tiny area 1/4th might be too small. 
+        // Let's aim for a target height of ~150px (similar to before which was Height/4 ~ 1080/4=270)
+
+        const targetHeight = 150;
+        const scale = targetHeight / sh;
+        canvas.width = sw * scale;
+        canvas.height = targetHeight;
+
         const ctx = canvas.getContext('2d');
         if (!ctx) return '';
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+
+        ctx.drawImage(videoRef.current, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
         return canvas.toDataURL('image/jpeg', 0.7);
     };
 
@@ -197,14 +225,16 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
             updateVideo(editingClipId, {
                 startTime: currentSelection[0],
                 endTime: currentSelection[1],
-                thumbnailUrl: thumbnail
+                thumbnailUrl: thumbnail,
+                crop: crop // Save crop
             });
             // We stay in edit mode
         } else {
             // Create New
             const color = getRandomColor();
-            addSubclip(parentVideo, currentSelection[0], currentSelection[1], color, thumbnail);
+            addSubclip(parentVideo, currentSelection[0], currentSelection[1], color, thumbnail, crop);
             setIsCreating(false);
+            setCrop(undefined);
         }
     };
 
@@ -212,6 +242,7 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
         if (id === editingClipId) {
             setEditingClipId(null);
             setIsCreating(false);
+            setCrop(undefined);
         }
         deleteRecording(id);
     };
@@ -221,6 +252,110 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
         if (videoRef.current) {
             videoRef.current.currentTime = time;
             setCurrentTime(time);
+        }
+    };
+
+    // --- Crop Inputs ---
+    const [cropDragMode, setCropDragMode] = useState<'create' | 'move' | 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w' | null>(null);
+    const [cropDragStart, setCropDragStart] = useState<{ x: number, y: number } | null>(null);
+    const [initialCrop, setInitialCrop] = useState<{ x: number, y: number, width: number, height: number } | null>(null);
+
+    const handleCropPointerDown = (e: React.PointerEvent, mode: 'create' | 'move' | 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w' = 'create') => {
+        if (!isCropping || !videoContainerRef.current) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = videoContainerRef.current.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width;
+        const y = (e.clientY - rect.top) / rect.height;
+
+        setCropDragMode(mode);
+        setCropDragStart({ x, y });
+
+        if (mode === 'create') {
+            setCrop({ x, y, width: 0, height: 0 });
+            setInitialCrop({ x, y, width: 0, height: 0 });
+        } else {
+            setInitialCrop(crop || null);
+        }
+    };
+
+    const handleCropPointerMove = (e: React.PointerEvent) => {
+        if (!isCropping || !cropDragMode || !cropDragStart || !videoContainerRef.current || !initialCrop) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = videoContainerRef.current.getBoundingClientRect();
+        const currentX = (e.clientX - rect.left) / rect.width;
+        const currentY = (e.clientY - rect.top) / rect.height;
+
+        const deltaX = currentX - cropDragStart.x;
+        const deltaY = currentY - cropDragStart.y;
+
+        let newCrop = { ...initialCrop };
+
+        if (cropDragMode === 'create') {
+            const minX = Math.min(initialCrop.x, currentX);
+            const minY = Math.min(initialCrop.y, currentY);
+            const width = Math.abs(currentX - initialCrop.x);
+            const height = Math.abs(currentY - initialCrop.y);
+            newCrop = { x: minX, y: minY, width, height };
+        } else if (cropDragMode === 'move') {
+            newCrop.x += deltaX;
+            newCrop.y += deltaY;
+        } else if (cropDragMode === 'se') {
+            newCrop.width += deltaX;
+            newCrop.height += deltaY;
+        } else if (cropDragMode === 'sw') {
+            newCrop.x += deltaX;
+            newCrop.width -= deltaX;
+            newCrop.height += deltaY;
+        } else if (cropDragMode === 'ne') {
+            newCrop.y += deltaY;
+            newCrop.width += deltaX;
+            newCrop.height -= deltaY;
+        } else if (cropDragMode === 'nw') {
+            newCrop.x += deltaX;
+            newCrop.y += deltaY;
+            newCrop.width -= deltaX;
+            newCrop.height -= deltaY;
+        } else if (cropDragMode === 'n') {
+            newCrop.y += deltaY;
+            newCrop.height -= deltaY;
+        } else if (cropDragMode === 's') {
+            newCrop.height += deltaY;
+        } else if (cropDragMode === 'w') {
+            newCrop.x += deltaX;
+            newCrop.width -= deltaX;
+        } else if (cropDragMode === 'e') {
+            newCrop.width += deltaX;
+        }
+
+        // Normalize negative width/height (flip) - simplified for now: just clamp min size
+        if (newCrop.width < 0.01) newCrop.width = 0.01;
+        if (newCrop.height < 0.01) newCrop.height = 0.01;
+
+        // Clamp to boundaries
+        if (newCrop.x < 0) newCrop.x = 0;
+        if (newCrop.y < 0) newCrop.y = 0;
+        if (newCrop.x + newCrop.width > 1) {
+            if (cropDragMode === 'move') newCrop.x = 1 - newCrop.width;
+            else newCrop.width = 1 - newCrop.x;
+        }
+        if (newCrop.y + newCrop.height > 1) {
+            if (cropDragMode === 'move') newCrop.y = 1 - newCrop.height;
+            else newCrop.height = 1 - newCrop.y;
+        }
+
+        setCrop(newCrop);
+    };
+
+    const handleCropPointerUp = () => {
+        if (isCropping) {
+            setCropDragMode(null);
+            setCropDragStart(null);
+            setInitialCrop(null);
+            if (editingClipId) {
+                commitChanges();
+            }
         }
     };
 
@@ -331,11 +466,13 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
             setEditingClipId(clickedClip.id);
             setSelection([clickedClip.startTime, clickedClip.endTime]);
             selectionRef.current = [clickedClip.startTime, clickedClip.endTime];
+            setCrop(clickedClip.crop || undefined); // Load crop on selection
             setIsCreating(true);
         } else {
             // Clicked empty space - deselect
             setEditingClipId(null);
             setIsCreating(false);
+            setCrop(undefined);
 
             // Also Seek
             if (videoRef.current) {
@@ -370,17 +507,69 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
     return (
         <Box sx={{ p: 2, bgcolor: '#000', color: 'white', borderRadius: 2, position: 'relative' }}>
 
-            {/* Main Player */}
-            <video
-                ref={videoRef}
-                src={videoUrl}
-                style={{ width: '100%', maxHeight: 300, backgroundColor: '#111' }}
-                onTimeUpdate={handleTimeUpdate}
-                onLoadedMetadata={handleLoadedMetadata}
-                onEnded={() => setIsPlaying(false)}
-                onClick={handlePlayPause}
-                crossOrigin="anonymous"
-            />
+            {/* Main Player Container with Crop Overlay */}
+            <Box
+                ref={videoContainerRef}
+                sx={{ position: 'relative', display: 'inline-block', width: '100%', maxHeight: 300, bgcolor: '#111' }}
+                onPointerDown={handleCropPointerDown}
+                onPointerMove={handleCropPointerMove}
+                onPointerUp={handleCropPointerUp}
+                onPointerLeave={handleCropPointerUp}
+                style={{ cursor: isCropping ? 'crosshair' : 'default' }}
+            >
+                <video
+                    ref={videoRef}
+                    src={videoUrl}
+                    style={{ width: '100%', height: '100%', display: 'block', maxHeight: 300, objectFit: 'contain' }}
+                    onTimeUpdate={handleTimeUpdate}
+                    onLoadedMetadata={handleLoadedMetadata}
+                    onEnded={() => setIsPlaying(false)}
+                    onClick={handlePlayPause}
+                    crossOrigin="anonymous"
+                />
+
+                {/* Crop Overlay */}
+                {crop && (
+                    <Box sx={{
+                        position: 'absolute',
+                        left: `${crop.x * 100}%`,
+                        top: `${crop.y * 100}%`,
+                        width: `${crop.width * 100}%`,
+                        height: `${crop.height * 100}%`,
+                        border: `1px solid ${existingSubclips.find(c => c.id === editingClipId)?.color || 'red'}`,
+                        bgcolor: editingClipId ? `${existingSubclips.find(c => c.id === editingClipId)?.color}33` : 'rgba(255,0,0,0.1)', // 33 is approx 20% opacity hex
+                        pointerEvents: 'auto', // Allow interacting with the box
+                        cursor: 'move'
+                    }}
+                        onPointerDown={(e) => handleCropPointerDown(e, 'move')}
+                    >
+                        {/* Resize Handles */}
+                        {[
+                            { mode: 'nw', top: -5, left: -5, cursor: 'nw-resize' },
+                            { mode: 'ne', top: -5, right: -5, cursor: 'ne-resize' },
+                            { mode: 'sw', bottom: -5, left: -5, cursor: 'sw-resize' },
+                            { mode: 'se', bottom: -5, right: -5, cursor: 'se-resize' },
+                            { mode: 'n', top: -5, left: '50%', transform: 'translateX(-50%)', cursor: 'n-resize' },
+                            { mode: 's', bottom: -5, left: '50%', transform: 'translateX(-50%)', cursor: 's-resize' },
+                            { mode: 'w', top: '50%', left: -5, transform: 'translateY(-50%)', cursor: 'w-resize' },
+                            { mode: 'e', top: '50%', right: -5, transform: 'translateY(-50%)', cursor: 'e-resize' }
+                        ].map((handle) => (
+                            <Box
+                                key={handle.mode}
+                                sx={{
+                                    position: 'absolute',
+                                    width: 10,
+                                    height: 10,
+                                    bgcolor: existingSubclips.find(c => c.id === editingClipId)?.color || 'red',
+                                    border: '1px solid white',
+                                    ...handle
+                                }}
+                                onPointerDown={(e) => handleCropPointerDown(e, handle.mode as any)}
+                            />
+                        ))}
+                    </Box>
+                )}
+            </Box>
 
             {/* Controls */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
@@ -397,6 +586,17 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                     onChange={handleSeek}
                     sx={{ flex: 1, mx: 2 }}
                 />
+
+                <IconButton
+                    onClick={() => {
+                        setIsCropping(!isCropping);
+                        if (!isCropping) handlePlayPause(); // Pause when entering crop mode
+                    }}
+                    color={isCropping ? "error" : "primary"}
+                    title="Crop Video"
+                >
+                    <Crop />
+                </IconButton>
 
                 <IconButton onClick={handleStartCreation} color="secondary" title="Create Subclip">
                     <Add />
@@ -430,7 +630,7 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                     const thumbnail = captureThumbnail(startTime);
 
                     const color = getRandomColor();
-                    const newId = addSubclip(parentVideo, startTime, endTime, color, thumbnail);
+                    const newId = addSubclip(parentVideo, startTime, endTime, color, thumbnail, crop);
 
                     // Immediately select and edit the new clip
                     setEditingClipId(newId);
@@ -561,6 +761,7 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                             if (clip.startTime !== undefined && clip.endTime !== undefined) {
                                 setSelection([clip.startTime, clip.endTime]);
                                 selectionRef.current = [clip.startTime, clip.endTime];
+                                setCrop(clip.crop || undefined); // Update crop state
                                 setIsCreating(true);
                                 if (videoRef.current) {
                                     videoRef.current.currentTime = clip.startTime;

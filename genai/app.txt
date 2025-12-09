@@ -110,3 +110,34 @@ when deleting, remove the handles, color area and drag button
 classlist: subclips thumbnails preview popup are broken now, fix. you can re=generate on the fly from metadata JSON 
 
 when creating a a subclip on double click, immediately select it
+
+
+now I need the ability to crop a zone of the video and create a subclip from it.
+evrything should keep working the same way. the rect coords should be stored in the metadata JSON.
+add the necessary controls to the editor to crop a zone of the video and create a subclip from it.
+
+each subclip must have a crop property rect associated , default is the full frame.
+on subclip click, the rect is overlaid on top of the video in the editor.
+the rect can be dragged and resized dynamically, on change, the previews are updated accordingly 
+
+
+
+add middle handles to rect controls, give the rect the same color as the subclip.
+on subclip selection, reset the rect to match the selected subclip properties.
+on rect change, update the subclip properties.
+on rect change, update the subclip preview.
+don't use ddashed lines, solid 1pix and handles colored like the subclip
+
+
+the subclip's rect should updated in the metadata JSON whenever the rect is modified by user
+for now, when clicking on a subclip the last rectangle is used and reassigned to the subclip.
+fix
+
+newly created subclips should have a fullscreen rect
+remove the "crop button" from the editor
+
+set the rect size to 100% of the video when creating a new subclip
+the hover video preview generation on the classlist thumbnails  doesn't work anymore, it should use the subclip's crop rect
+fix
+
+the previews are still black but seem to have the good aspect ratio, make them fit in a 200px box but mostly, make them work

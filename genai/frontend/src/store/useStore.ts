@@ -15,6 +15,7 @@ export interface VideoClip {
   endTime?: number;
   thumbnailUrl?: string;
   color?: string;
+  crop?: { x: number; y: number; width: number; height: number };
 }
 
 export interface GestureClass {
@@ -33,7 +34,7 @@ interface AppState {
   addClass: (name: string) => void;
   addRecording: (blob: Blob) => void;
   // NEW: Add a virtual subclip
-  addSubclip: (parentVideo: VideoClip, start: number, end: number, color: string, thumbnail: string) => string;
+  addSubclip: (parentVideo: VideoClip, start: number, end: number, color: string, thumbnail: string, crop?: { x: number, y: number, width: number, height: number }) => string;
   
   deleteRecording: (id: string) => void;
   moveVideo: (videoId: string, targetClassId: string) => void;
@@ -166,7 +167,7 @@ export const useStore = create<AppState>()(
         };
       }),
 
-      addSubclip: (parentVideo, start, end, color, thumbnail) => {
+      addSubclip: (parentVideo, start, end, color, thumbnail, crop) => {
           const id = `subclip-${Date.now()}-${Math.random().toString(36).substr(2,9)}`;
           // Subclips default to "Unsorted" (or same class as parent? User said "dragged to classes", implying they start unsorted or user chooses).
           // Let's put them in 'Unsorted' initially so they appear in Inbox, ready to be dragged.
@@ -179,7 +180,8 @@ export const useStore = create<AppState>()(
               startTime: start,
               endTime: end,
               thumbnailUrl: thumbnail,
-              color: color
+              color: color,
+              crop: crop
           };
           set((state) => ({ videos: [...state.videos, newClip] }));
           return id;
@@ -215,6 +217,7 @@ export const useStore = create<AppState>()(
               endTime: v.endTime,
               thumbnailUrl: v.thumbnailUrl,
               color: v.color,
+              crop: v.crop,
               name: v.name
           })) 
       }),
