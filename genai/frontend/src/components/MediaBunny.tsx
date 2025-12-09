@@ -107,10 +107,52 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
     const [crop, setCrop] = useState<{ x: number, y: number, width: number, height: number } | undefined>(undefined);
     const cropStartRef = useRef<{ x: number, y: number } | null>(null);
     const videoContainerRef = useRef<HTMLDivElement>(null);
+    const [videoBoundsState, setVideoBoundsState] = useState<{
+        offsetX: number;
+        offsetY: number;
+        width: number;
+        height: number;
+    } | null>(null);
 
     // Refs for stable access in event listeners
     const selectionRef = useRef<number[]>([0, 0]);
     const isDraggingRef = useRef(false);
+
+    // Helper: Get actual video display bounds within container (accounting for object-fit:contain letterboxing)
+    const getVideoBounds = () => {
+        const video = videoRef.current;
+        const container = videoContainerRef.current;
+        if (!video || !container) return null;
+        if (video.videoWidth === 0 || video.videoHeight === 0) return null; // Video not loaded yet
+
+        const containerRect = container.getBoundingClientRect();
+        const videoAspect = video.videoWidth / video.videoHeight;
+        const containerAspect = containerRect.width / containerRect.height;
+
+        let videoDisplayWidth: number, videoDisplayHeight: number;
+        let offsetX = 0, offsetY = 0;
+
+        if (videoAspect > containerAspect) {
+            // Video is wider than container - letterboxing on top/bottom
+            videoDisplayWidth = containerRect.width;
+            videoDisplayHeight = containerRect.width / videoAspect;
+            offsetY = (containerRect.height - videoDisplayHeight) / 2;
+        } else {
+            // Video is taller/narrower than container - letterboxing on left/right
+            videoDisplayHeight = containerRect.height;
+            videoDisplayWidth = containerRect.height * videoAspect;
+            offsetX = (containerRect.width - videoDisplayWidth) / 2;
+        }
+
+        return {
+            offsetX,
+            offsetY,
+            width: videoDisplayWidth,
+            height: videoDisplayHeight,
+            containerWidth: containerRect.width,
+            containerHeight: containerRect.height
+        };
+    };
 
     // Sync Ref with State
     useEffect(() => {
@@ -129,11 +171,16 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                 setIsCreating(true);
                 setCrop(clip.crop || { x: 0, y: 0, width: 1, height: 1 }); // Load crop or default full
                 setIsCropping(true);
-                // Also seek to start
+                // Also seek to start and update video bounds
                 if (videoRef.current) {
                     videoRef.current.currentTime = clip.startTime;
                     setCurrentTime(clip.startTime);
                 }
+                // Update video bounds for crop overlay
+                setTimeout(() => {
+                    const bounds = getVideoBounds();
+                    if (bounds) setVideoBoundsState(bounds);
+                }, 100);
             }
         }
     }, [activeSubclipId, existingSubclips.length]);
@@ -155,7 +202,12 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
     };
 
     const handleLoadedMetadata = () => {
-        if (videoRef.current) setDuration(videoRef.current.duration);
+        if (videoRef.current) {
+            setDuration(videoRef.current.duration);
+            // Update video bounds after metadata loads
+            const bounds = getVideoBounds();
+            if (bounds) setVideoBoundsState(bounds);
+        }
     };
 
     const handleStartCreation = () => {
@@ -267,9 +319,11 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
         if (!isCropping || !videoContainerRef.current) return;
         e.preventDefault();
         e.stopPropagation();
-        const rect = videoContainerRef.current.getBoundingClientRect();
-        const x = (e.clientX - rect.left) / rect.width;
-        const y = (e.clientY - rect.top) / rect.height;
+
+        const containerRect = videoContainerRef.current.getBoundingClientRect();
+        // Calculate position as percentage of container
+        const x = Math.max(0, Math.min(1, (e.clientX - containerRect.left) / containerRect.width));
+        const y = Math.max(0, Math.min(1, (e.clientY - containerRect.top) / containerRect.height));
 
         setCropDragMode(mode);
         setCropDragStart({ x, y });
@@ -286,9 +340,11 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
         if (!isCropping || !cropDragMode || !cropDragStart || !videoContainerRef.current || !initialCrop) return;
         e.preventDefault();
         e.stopPropagation();
-        const rect = videoContainerRef.current.getBoundingClientRect();
-        const currentX = (e.clientX - rect.left) / rect.width;
-        const currentY = (e.clientY - rect.top) / rect.height;
+
+        const containerRect = videoContainerRef.current.getBoundingClientRect();
+        // Calculate position as percentage of container
+        const currentX = Math.max(0, Math.min(1, (e.clientX - containerRect.left) / containerRect.width));
+        const currentY = Math.max(0, Math.min(1, (e.clientY - containerRect.top) / containerRect.height));
 
         const deltaX = currentX - cropDragStart.x;
         const deltaY = currentY - cropDragStart.y;
@@ -541,10 +597,11 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                         top: `${crop.y * 100}%`,
                         width: `${crop.width * 100}%`,
                         height: `${crop.height * 100}%`,
-                        border: `1px solid ${existingSubclips.find(c => c.id === editingClipId)?.color || 'red'}`,
-                        bgcolor: editingClipId ? `${existingSubclips.find(c => c.id === editingClipId)?.color}33` : 'rgba(255,0,0,0.1)', // 33 is approx 20% opacity hex
-                        pointerEvents: 'auto', // Allow interacting with the box
-                        cursor: 'move'
+                        border: `2px solid ${existingSubclips.find(c => c.id === editingClipId)?.color || '#00ff00'}`,
+                        bgcolor: editingClipId ? `${existingSubclips.find(c => c.id === editingClipId)?.color}22` : 'rgba(0,255,0,0.1)',
+                        pointerEvents: 'auto',
+                        cursor: 'move',
+                        boxSizing: 'border-box'
                     }}
                         onPointerDown={(e) => handleCropPointerDown(e, 'move')}
                     >

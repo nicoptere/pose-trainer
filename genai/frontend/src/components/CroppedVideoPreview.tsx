@@ -27,29 +27,24 @@ export default function CroppedVideoPreview({
     color = '#666'
 }: Props) {
     const videoRef = useRef<HTMLVideoElement>(null);
-    const [videoReady, setVideoReady] = useState(false);
+    const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null);
 
     // Default crop to full frame if not provided
     const effectiveCrop = crop || { x: 0, y: 0, width: 1, height: 1 };
-
-    // Calculate container dimensions to maintain crop aspect ratio
-    // Assuming 16:9 source, crop aspect will follow
-    const cropAspect = effectiveCrop.width / effectiveCrop.height;
-    const containerWidth = maxWidth;
-    const containerHeight = Math.min(containerWidth / cropAspect, 200);
 
     useEffect(() => {
         const video = videoRef.current;
         if (!video) return;
 
         const handleLoadedData = () => {
+            // Get actual video dimensions
+            setVideoDimensions({ width: video.videoWidth, height: video.videoHeight });
             video.currentTime = startTime;
-            video.playbackRate = 2; // 2x speed
-            setVideoReady(true);
+            video.playbackRate = 2;
         };
 
         const handleSeeked = () => {
-            video.playbackRate = 2; // Ensure 2x speed
+            video.playbackRate = 2;
             video.play().catch(() => { });
         };
 
@@ -85,15 +80,34 @@ export default function CroppedVideoPreview({
         };
     }, [videoUrl, startTime, endTime]);
 
+    // Calculate the cropped region's aspect ratio using actual video dimensions
+    let containerWidth = maxWidth;
+    let containerHeight = maxWidth * 9 / 16; // Default 16:9 aspect
+
+    if (videoDimensions) {
+        // Calculate the actual pixel dimensions of the crop region
+        const cropPixelWidth = effectiveCrop.width * videoDimensions.width;
+        const cropPixelHeight = effectiveCrop.height * videoDimensions.height;
+        const cropAspect = cropPixelWidth / cropPixelHeight;
+
+        // Fit within maxWidth while respecting aspect ratio
+        containerWidth = maxWidth;
+        containerHeight = maxWidth / cropAspect;
+
+        // Cap height at 200
+        if (containerHeight > 200) {
+            containerHeight = 200;
+            containerWidth = 200 * cropAspect;
+        }
+    }
+
     // CSS-based cropping: scale video up and position it so the crop region fills the container
     const scaleX = 1 / effectiveCrop.width;
     const scaleY = 1 / effectiveCrop.height;
-    const translateX = -effectiveCrop.x * 100 * scaleX;
-    const translateY = -effectiveCrop.y * 100 * scaleY;
 
     return (
         <Box sx={{ bgcolor: 'black', border: `2px solid ${color}`, overflow: 'hidden' }}>
-            {/* Container with fixed dimensions matching crop aspect ratio */}
+            {/* Container with dimensions matching crop aspect ratio */}
             <Box sx={{
                 width: containerWidth,
                 height: containerHeight,
@@ -110,8 +124,8 @@ export default function CroppedVideoPreview({
                         position: 'absolute',
                         width: `${scaleX * 100}%`,
                         height: `${scaleY * 100}%`,
-                        left: `${translateX}%`,
-                        top: `${translateY}%`,
+                        left: `${-effectiveCrop.x * scaleX * 100}%`,
+                        top: `${-effectiveCrop.y * scaleY * 100}%`,
                         objectFit: 'cover'
                     }}
                 />
