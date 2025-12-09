@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { DndContext, DragOverlay, DragStartEvent, DragEndEvent, useSensor, useSensors, PointerSensor } from '@dnd-kit/core';
 import { Box, Typography, TextField, Paper, InputAdornment, Button, Slider, IconButton, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
 import { Search, Add, Close, Delete } from '@mui/icons-material';
@@ -34,6 +34,11 @@ export default function ClassManager() {
     };
 
     const hoveredVideoData = hoveredVideoId ? videos.find(v => v.id === hoveredVideoId) : null;
+
+    // Use callback to stabilize function reference and prevent infinite loop in CroppedVideoPreview
+    const handlePreviewReady = useCallback((id: string) => {
+        useStore.getState().updateVideo(id, { previewDirty: false });
+    }, []);
 
     // Handle prefixed IDs from MediaBunny draggable
     const activeVideoIdRaw = activeId ? (activeId.startsWith('editor-') ? activeId.replace('editor-', '') : activeId) : null;
@@ -130,6 +135,12 @@ export default function ClassManager() {
                         ) : previewUrl ? (
                             <>
                                 <video
+                                    ref={(el) => {
+                                        if (el) {
+                                            el.playbackRate = 1.0;
+                                            el.defaultPlaybackRate = 1.0;
+                                        }
+                                    }}
                                     src={previewUrl}
                                     controls
                                     autoPlay
@@ -185,6 +196,7 @@ export default function ClassManager() {
                                             onClick={() => setPreviewUrl(video.url)}
                                             onHover={handleVideoHover}
                                             onLeave={() => setHoveredVideoId(null)}
+                                            onDelete={() => setConfirmDeleteVideoId(video.id)}
                                         />
                                     ))}
                                     {unsortedVideos.length === 0 && <Typography variant="caption" color="text.secondary">No videos</Typography>}
@@ -269,14 +281,8 @@ export default function ClassManager() {
                                             width={80}
                                             color={video.color}
                                             startTime={video.startTime}
-                                            onClick={() => {
-                                                setPreviewUrl(video.url);
-                                                if (video.parentVideoId) {
-                                                    setEditingVideoId(video.parentVideoId);
-                                                    setClickedSubclipId(video.id); // Triggers edit mode in MediaBunny
-                                                    setIsEditing(true);
-                                                }
-                                            }}
+                                            previewDirty={video.previewDirty}
+                                            onClick={() => setPreviewUrl(video.url)}
                                             onHover={handleVideoHover}
                                             onLeave={() => setHoveredVideoId(null)}
                                             onDelete={() => {
@@ -327,6 +333,8 @@ export default function ClassManager() {
                         crop={hoveredVideoData.crop}
                         maxWidth={200}
                         color={hoveredVideoData.color}
+                        videoId={hoveredVideoData.id}
+                        onPreviewReady={handlePreviewReady}
                     />
                 </Paper>
             )}

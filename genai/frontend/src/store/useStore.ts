@@ -9,13 +9,21 @@ export interface VideoClip {
   blob?: Blob; // For new recordings
   classId: string; // "Unsorted", "Squat", etc.
   
-  // Subclip specific
+  // Subclip specific - technically optional for base VideoClip, but required for Subclip type
   parentVideoId?: string;
   startTime?: number;
   endTime?: number;
   thumbnailUrl?: string;
   color?: string;
   crop?: { x: number; y: number; width: number; height: number };
+  previewDirty?: boolean;
+}
+
+// Extends VideoClip to enforce subclip-specific fields
+export interface Subclip extends VideoClip {
+  parentVideoId: string;
+  startTime: number;
+  endTime: number;
 }
 
 export interface GestureClass {
@@ -185,7 +193,7 @@ export const useStore = create<AppState>()(
           const id = `subclip-${Date.now()}-${Math.random().toString(36).substr(2,9)}`;
           // Subclips default to "Unsorted" (or same class as parent? User said "dragged to classes", implying they start unsorted or user chooses).
           // Let's put them in 'Unsorted' initially so they appear in Inbox, ready to be dragged.
-          const newClip: VideoClip = {
+          const newClip: Subclip = {
               id,
               name: `${parentVideo.name} (Clip)`, // Or allow user naming
               url: parentVideo.url,
@@ -242,7 +250,8 @@ export const useStore = create<AppState>()(
               thumbnailUrl: v.thumbnailUrl,
               color: v.color,
               crop: v.crop,
-              name: v.name
+              name: v.name,
+              previewDirty: v.previewDirty
           })) 
       }),
       merge: (persistedState: any, currentState) => {

@@ -10,6 +10,8 @@ interface Props {
     crop?: { x: number; y: number; width: number; height: number };
     maxWidth?: number;
     color?: string;
+    videoId?: string;
+    onPreviewReady?: (videoId: string) => void;
 }
 
 function formatTime(s: number) {
@@ -24,7 +26,9 @@ export default function CroppedVideoPreview({
     endTime,
     crop,
     maxWidth = 200,
-    color = '#666'
+    color = '#666',
+    videoId,
+    onPreviewReady
 }: Props) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null);
@@ -40,11 +44,13 @@ export default function CroppedVideoPreview({
             // Get actual video dimensions
             setVideoDimensions({ width: video.videoWidth, height: video.videoHeight });
             video.currentTime = startTime;
-            video.playbackRate = 2;
+            video.defaultPlaybackRate = 1.0;
+            video.playbackRate = 1.0;
         };
 
         const handleSeeked = () => {
-            video.playbackRate = 2;
+            // When seek completes, try validation
+            video.playbackRate = 1.0;
             video.play().catch(() => { });
         };
 
@@ -58,8 +64,11 @@ export default function CroppedVideoPreview({
         };
 
         const handleCanPlay = () => {
-            video.playbackRate = 2;
-            video.play().catch(() => { });
+            video.defaultPlaybackRate = 1.0;
+            video.playbackRate = 1.0;
+            video.play().then(() => {
+                if (videoId && onPreviewReady) onPreviewReady(videoId);
+            }).catch(() => { });
         };
 
         video.addEventListener('loadeddata', handleLoadedData);
@@ -78,7 +87,7 @@ export default function CroppedVideoPreview({
             video.removeEventListener('canplay', handleCanPlay);
             video.pause();
         };
-    }, [videoUrl, startTime, endTime]);
+    }, [videoUrl, startTime, endTime, videoId, onPreviewReady]);
 
     // Calculate the cropped region's aspect ratio using actual video dimensions
     let containerWidth = maxWidth;

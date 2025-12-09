@@ -167,3 +167,23 @@ optimize implementation , replace th classlist thumbnail preview with a canvas:
 the canvas snapshots every frame of the video and stores it in a buffer.
 when the user hovers the thumbnail, the canvas is displayed in the preview div
 the canvas should be updated in real time, so that it matches the video in the editor
+
+back to the black preview :
+
+something wen t wrong with the classlit subclip thumbnail preview again.
+may be it's easier to recompute the preview video : when the app loads.
+2 when a clip is finished updating in the editor and the user hovers the thumbnail,
+create a dirty property that will trigger recomputation.
+while the preview isn't recomputed, display a throbber on the classlist thumbnail
+
+createa a subclip class and increase preview playback speed to 2x 
+
+video preview in collection and in the classlist panel should have a speed of 2x the original speed
+
+the class list panel preview is 1 second long  in stead of subclip duration, 
+move the editor thrsahbin icon to the top right of each video thumbnail in the collection panel
+
+
+remove the editor trashbin icon 
+call the preview in classlist panel on click the thumbnail
+all playback speeds should be 1x

@@ -70,14 +70,7 @@ function DraggableSubclipThumbnail({ clip, onDelete, onSelect, isEditing }: { cl
                     : 'Full'}
             </Typography>
 
-            <IconButton
-                size="small"
-                sx={{ position: 'absolute', top: 0, right: 0, p: 0.2, bgcolor: 'rgba(0,0,0,0.5)' }}
-                onClick={(e) => { e.stopPropagation(); onDelete(clip.id); }}
-                onPointerDown={(e) => e.stopPropagation()} // Prevent drag 
-            >
-                <Delete fontSize="small" sx={{ color: 'white' }} />
-            </IconButton>
+            {/* Delete button removed as requested */}
         </Paper>
     );
 }
@@ -280,7 +273,8 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                 startTime: currentSelection[0],
                 endTime: currentSelection[1],
                 thumbnailUrl: thumbnail,
-                crop: crop // Save crop
+                crop: crop, // Save crop
+                previewDirty: true
             });
             // We stay in edit mode
         } else {
@@ -805,8 +799,8 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                 )}
             </Box>
 
-            {/* Clip List Below */}
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 2, pb: 1 }}>
+            {/* List of clips below (Optional) */}
+            <Box sx={{ display: 'flex', gap: 1, mt: 2, overflowX: 'auto', pb: 1 }}>
                 {existingSubclips.map(clip => (
                     <DraggableSubclipThumbnail
                         key={clip.id}
@@ -814,16 +808,16 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                         onDelete={handleDeleteClip}
                         onSelect={(id) => {
                             setEditingClipId(id);
-                            if (clip.startTime !== undefined && clip.endTime !== undefined) {
-                                setSelection([clip.startTime, clip.endTime]);
-                                selectionRef.current = [clip.startTime, clip.endTime];
-                                setCrop(clip.crop || { x: 0, y: 0, width: 1, height: 1 }); // Update crop state
-                                setIsCreating(true);
-                                setIsCropping(true);
+                            if (clip.startTime !== undefined) {
+                                setSelection([clip.startTime, clip.endTime || clip.startTime + 5.0]);
+                                selectionRef.current = [clip.startTime, clip.endTime || clip.startTime + 5.0];
                                 if (videoRef.current) {
                                     videoRef.current.currentTime = clip.startTime;
                                     setCurrentTime(clip.startTime);
                                 }
+                                setCrop(clip.crop || { x: 0, y: 0, width: 1, height: 1 });
+                                setIsCreating(true);
+                                setIsCropping(true);
                             }
                         }}
                         isEditing={editingClipId === clip.id}
@@ -831,64 +825,9 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                 ))}
             </Box>
 
-            {/* Floating Preview Window */}
-            {hoveredClip && hoveredClip.startTime !== undefined && (
-                <Paper sx={{
-                    position: 'fixed',
-                    left: hoverPosition.x,
-                    top: hoverPosition.y,
-                    width: 'auto',
-                    maxWidth: 300,
-                    height: 'auto',
-                    zIndex: 9999,
-                    bgcolor: 'black',
-                    border: `2px solid ${hoveredClip.color}`,
-                    overflow: 'hidden',
-                    pointerEvents: 'none'
-                }}>
-                    <video
-                        ref={previewVideoRef}
-                        src={videoUrl}
-                        style={{ maxWidth: '100%', maxHeight: 200, display: 'block' }}
-                        muted
-                        loop
-                        onTimeUpdate={(e) => {
-                            const vid = e.currentTarget;
-                            if (vid.currentTime >= (hoveredClip.endTime || 0)) {
-                                vid.currentTime = hoveredClip.startTime || 0;
-                            }
-                        }}
-                    />
-                </Paper>
-            )}
-
-            {/* Frame Preview Window */}
-            {timelineHoverTime !== null && (
-                <Paper sx={{
-                    position: 'fixed',
-                    left: timelineHoverPos.x,
-                    top: timelineHoverPos.y + 160,
-                    width: 120,
-                    height: 90,
-                    zIndex: 9999,
-                    bgcolor: 'black',
-                    border: '1px solid white',
-                    overflow: 'hidden',
-                    pointerEvents: 'none',
-                    display: 'flex', justifyContent: 'center', alignItems: 'center'
-                }}>
-                    <video
-                        ref={timelinePreviewRef}
-                        src={videoUrl}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        muted
-                    />
-                    <Typography variant="caption" sx={{ position: 'absolute', bottom: 0, bgcolor: 'rgba(0,0,0,0.7)', width: '100%', textAlign: 'center', color: 'white' }}>
-                        {formatTime(timelineHoverTime)}
-                    </Typography>
-                </Paper>
-            )}
-
+            <Typography variant="caption" color="gray" sx={{ mt: 1, display: 'block' }}>
+                Double-click timeline to add clip. Drag yellow region to move/resize.
+            </Typography>
         </Box>
     );
 }
@@ -896,6 +835,5 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
 function formatTime(s: number) {
     const mins = Math.floor(s / 60);
     const secs = Math.floor(s % 60);
-    const ms = Math.floor((s % 1) * 10);
-    return `${mins}:${secs.toString().padStart(2, '0')}.${ms}`;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
