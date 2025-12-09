@@ -127,7 +127,8 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                 setSelection(newSel);
                 selectionRef.current = newSel;
                 setIsCreating(true);
-                setCrop(clip.crop || undefined); // Load crop or reset
+                setCrop(clip.crop || { x: 0, y: 0, width: 1, height: 1 }); // Load crop or default full
+                setIsCropping(true);
                 // Also seek to start
                 if (videoRef.current) {
                     videoRef.current.currentTime = clip.startTime;
@@ -160,7 +161,8 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
     const handleStartCreation = () => {
         if (!videoRef.current) return;
         setEditingClipId(null); // Clear editing mode
-        setCrop(undefined); // Reset crop
+        setCrop({ x: 0, y: 0, width: 1, height: 1 }); // Default to full screen
+        setIsCropping(true); // Enable creation mode
         const start = videoRef.current.currentTime;
         const end = Math.min(start + 5.0, duration);
         const newSel = [start, end];
@@ -243,6 +245,7 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
             setEditingClipId(null);
             setIsCreating(false);
             setCrop(undefined);
+            setIsCropping(false);
         }
         deleteRecording(id);
     };
@@ -466,13 +469,15 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
             setEditingClipId(clickedClip.id);
             setSelection([clickedClip.startTime, clickedClip.endTime]);
             selectionRef.current = [clickedClip.startTime, clickedClip.endTime];
-            setCrop(clickedClip.crop || undefined); // Load crop on selection
+            setCrop(clickedClip.crop || { x: 0, y: 0, width: 1, height: 1 }); // Load crop or default full
             setIsCreating(true);
+            setIsCropping(true);
         } else {
             // Clicked empty space - deselect
             setEditingClipId(null);
             setIsCreating(false);
             setCrop(undefined);
+            setIsCropping(false);
 
             // Also Seek
             if (videoRef.current) {
@@ -587,16 +592,7 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                     sx={{ flex: 1, mx: 2 }}
                 />
 
-                <IconButton
-                    onClick={() => {
-                        setIsCropping(!isCropping);
-                        if (!isCropping) handlePlayPause(); // Pause when entering crop mode
-                    }}
-                    color={isCropping ? "error" : "primary"}
-                    title="Crop Video"
-                >
-                    <Crop />
-                </IconButton>
+
 
                 <IconButton onClick={handleStartCreation} color="secondary" title="Create Subclip">
                     <Add />
@@ -630,13 +626,16 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                     const thumbnail = captureThumbnail(startTime);
 
                     const color = getRandomColor();
-                    const newId = addSubclip(parentVideo, startTime, endTime, color, thumbnail, crop);
+                    const initialCrop = { x: 0, y: 0, width: 1, height: 1 };
+                    const newId = addSubclip(parentVideo, startTime, endTime, color, thumbnail, initialCrop);
 
                     // Immediately select and edit the new clip
                     setEditingClipId(newId);
                     setSelection([startTime, endTime]);
                     selectionRef.current = [startTime, endTime];
+                    setCrop(initialCrop);
                     setIsCreating(true);
+                    setIsCropping(true); // Enable interaction
 
                     // Ensure UI is synced
                     if (videoRef.current) {
@@ -761,8 +760,9 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                             if (clip.startTime !== undefined && clip.endTime !== undefined) {
                                 setSelection([clip.startTime, clip.endTime]);
                                 selectionRef.current = [clip.startTime, clip.endTime];
-                                setCrop(clip.crop || undefined); // Update crop state
+                                setCrop(clip.crop || { x: 0, y: 0, width: 1, height: 1 }); // Update crop state
                                 setIsCreating(true);
+                                setIsCropping(true);
                                 if (videoRef.current) {
                                     videoRef.current.currentTime = clip.startTime;
                                     setCurrentTime(clip.startTime);

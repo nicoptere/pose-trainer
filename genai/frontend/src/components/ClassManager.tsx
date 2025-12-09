@@ -322,37 +322,47 @@ export default function ClassManager() {
                     border: '1px solid white',
                     overflow: 'hidden'
                 }}>
-                    <video
-                        key={hoveredVideoId} // Force remount on change
-                        src={hoveredVideoData.url}
-                        autoPlay
-                        loop
-                        muted
-                        onLoadedMetadata={(e) => {
-                            const el = e.currentTarget;
-                            if (hoveredVideoData.startTime !== undefined) {
-                                el.currentTime = hoveredVideoData.startTime;
-                            }
-                        }}
-                        onTimeUpdate={(e) => {
-                            const el = e.currentTarget;
-                            if (hoveredVideoData.startTime !== undefined) {
-                                const start = hoveredVideoData.startTime;
-                                const end = hoveredVideoData.endTime;
+                    <Box sx={{ maxWidth: 250, maxHeight: 200, overflow: 'hidden', position: 'relative', bgcolor: 'black' }}>
+                        <video
+                            key={hoveredVideoId} // Force remount on change
+                            src={hoveredVideoData.url}
+                            autoPlay
+                            loop
+                            muted
+                            onLoadedMetadata={(e) => {
+                                const el = e.currentTarget;
+                                if (hoveredVideoData.startTime !== undefined) {
+                                    el.currentTime = hoveredVideoData.startTime;
+                                }
+                            }}
+                            onTimeUpdate={(e) => {
+                                const el = e.currentTarget;
+                                if (hoveredVideoData.startTime !== undefined) {
+                                    const start = hoveredVideoData.startTime;
+                                    const end = hoveredVideoData.endTime;
 
-                                if (end !== undefined) {
-                                    if (el.currentTime >= end) {
+                                    if (end !== undefined) {
+                                        if (el.currentTime >= end) {
+                                            el.currentTime = start;
+                                        }
+                                    }
+                                    if (end !== undefined && el.currentTime < start) {
                                         el.currentTime = start;
                                     }
                                 }
-                                // Safety for seeking back if dragged/started before
-                                if (end !== undefined && el.currentTime < start) {
-                                    el.currentTime = start;
-                                }
-                            }
-                        }}
-                        style={{ width: '100%', display: 'block' }}
-                    />
+                            }}
+                            style={hoveredVideoData.crop && hoveredVideoData.crop.width < 1 ? {
+                                display: 'block',
+                                maxWidth: 250,
+                                transformOrigin: '0 0',
+                                transform: `scale(${1 / hoveredVideoData.crop.width}) translate(-${hoveredVideoData.crop.x * 100}%, -${hoveredVideoData.crop.y * 100}%)`
+                            } : {
+                                display: 'block',
+                                maxWidth: 250,
+                                maxHeight: 200
+                            }}
+                        />
+                    </Box>
                     <Box sx={{ p: 0.5, bgcolor: 'rgba(0,0,0,0.8)' }}>
                         <Typography variant="caption" color="white">
                             {hoveredVideoData.startTime !== undefined
