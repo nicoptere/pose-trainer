@@ -1,0 +1,14 @@
+
+
+on click "edit"
+
+a timeline the height of a thumbnail, showing the video over time appears below the preview.
+
+it's much llike the iOS video editor 
+user can scrub a ply head, 
+
+to create Subclips, user can choose a time range by dragging a zone over the video timeline.
+the zone is represented as a color rectangle with handles of both sides, handles can be dragged to adjust the clip duration.
+a clip is created below the timeline, it is a thumbnail of the video with the same color as the zone.
+user can create multiple subclips, each with different color.
+on subclip rollover, a preview of the subclip appears in a small floating window

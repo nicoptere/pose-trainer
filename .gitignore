@@ -7,6 +7,6 @@
 output
 models
 temp
-videos
+/videos
 output_with_model
 __pycache__
