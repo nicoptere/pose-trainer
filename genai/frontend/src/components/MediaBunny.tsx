@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { Box, IconButton, Slider, Typography, Paper } from '@mui/material';
-import { PlayArrow, Pause, Add, Delete, Crop } from '@mui/icons-material';
+import { PlayArrow, Pause, Add, Delete, Crop, Loop } from '@mui/icons-material';
 import { useStore, VideoClip } from '../store/useStore';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
@@ -15,7 +15,13 @@ interface Props {
 }
 
 // Draggable Thumbnail Component for DnD-Kit integration
-function DraggableSubclipThumbnail({ clip, onDelete, onSelect, isEditing }: { clip: VideoClip, onDelete: (id: string) => void, onSelect: (id: string) => void, isEditing: boolean }) {
+function DraggableSubclipThumbnail({ clip, onDelete, onSelect, isEditing, onPlayPause }: {
+    clip: VideoClip,
+    onDelete: (id: string) => void,
+    onSelect: (id: string) => void,
+    isEditing: boolean,
+    onPlayPause: (id: string) => void
+}) {
     // Prefix ID to avoid conflict with ClassManager draggables
     const draggableId = `editor-${clip.id}`;
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -40,7 +46,12 @@ function DraggableSubclipThumbnail({ clip, onDelete, onSelect, isEditing }: { cl
             style={style}
             {...listeners}
             {...attributes}
-            onClick={() => onSelect(clip.id)}
+            // Modified: Clicking thumbnail selects AND starts playing it
+            onClick={() => {
+                onSelect(clip.id);
+                // Also trigger play pause logic (auto play)
+                onPlayPause(clip.id);
+            }}
             sx={{
                 width: 100, // Fixed width for wrap
                 height: 80,
@@ -64,13 +75,32 @@ function DraggableSubclipThumbnail({ clip, onDelete, onSelect, isEditing }: { cl
                 <Box sx={{ width: '100%', height: 40, bgcolor: 'rgba(0,0,0,0.2)', mb: 0.5 }} />
             )}
 
-            <Typography variant="caption" sx={{ color: 'white', fontWeight: 'bold', fontSize: '0.7rem' }}>
-                {clip.endTime !== undefined
-                    ? `${formatTime(clip.endTime - (clip.startTime || 0))}s`
-                    : 'Full'}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between', px: 0.5 }}>
+                <Typography variant="caption" sx={{ color: 'white', fontWeight: 'bold', fontSize: '0.7rem' }}>
+                    {clip.endTime !== undefined
+                        ? `${formatTime(clip.endTime - (clip.startTime || 0))}s`
+                        : 'Full'}
+                </Typography>
 
-            {/* Delete button removed as requested */}
+                <IconButton
+                    size="small"
+                    sx={{ p: 0.2, bgcolor: 'rgba(0,0,0,0.3)', '&:hover': { bgcolor: 'rgba(0,0,0,0.5)' } }}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        // This button now acts as a pause/play toggle specifically for this clip context? 
+                        // User request: "add a pause button to the subclip thumbnail in the editor to pause the subclip in loop"
+                        // But also: "on thumbnail click switch playback to the selected subclip"
+                        // So clicking the MAIN thumbnail plays. Clicking this small button can toggle pause?
+
+                        // Let's make this button a Toggle: Play if stopped/other, Pause if playing THIS clip
+                        onPlayPause(clip.id);
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                >
+                    {/* We need to know if THIS clip is currently playing/looping to show Pause icon */}
+                    {isEditing ? <Pause sx={{ color: 'white', fontSize: '0.9rem' }} /> : <PlayArrow sx={{ color: 'white', fontSize: '0.9rem' }} />}
+                </IconButton>
+            </Box>
         </Paper>
     );
 }
@@ -89,6 +119,10 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
+
+    // Loop State
+    const [isLooping, setIsLooping] = useState(false);
+    const [loopRegion, setLoopRegion] = useState<[number, number] | null>(null);
 
     // New Clip / Edit State
     const [isCreating, setIsCreating] = useState(false);
@@ -183,6 +217,10 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
     const [timelineHoverPos, setTimelineHoverPos] = useState({ x: 0, y: 0 });
 
     const handlePlayPause = () => {
+        // Stop looping if user Manually toggles play/pause using the main button
+        setIsLooping(false);
+        setLoopRegion(null);
+
         if (videoRef.current) {
             if (isPlaying) videoRef.current.pause();
             else videoRef.current.play();
@@ -191,7 +229,17 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
     };
 
     const handleTimeUpdate = () => {
-        if (videoRef.current) setCurrentTime(videoRef.current.currentTime);
+        if (videoRef.current) {
+            const time = videoRef.current.currentTime;
+            setCurrentTime(time);
+
+            // Handle Looping
+            if (isLooping && loopRegion) {
+                if (time >= loopRegion[1]) {
+                    videoRef.current.currentTime = loopRegion[0];
+                }
+            }
+        }
     };
 
     const handleLoadedMetadata = () => {
@@ -216,6 +264,8 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
         setIsCreating(true);
         videoRef.current.pause();
         setIsPlaying(false);
+        setLoopRegion(null);
+        setIsLooping(false);
     };
 
     const captureThumbnail = (time: number): string => {
@@ -298,11 +348,52 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
 
     const handleSeek = (e: Event, value: number | number[]) => {
         const time = value as number;
+        // Stop looping on seek
+        setIsLooping(false);
+        setLoopRegion(null);
+
         if (videoRef.current) {
             videoRef.current.currentTime = time;
             setCurrentTime(time);
         }
     };
+
+    // Updated Handler: Toggle behavior
+    const handlePlaySubclipLoop = (subclipId: string) => {
+        const clip = existingSubclips.find(c => c.id === subclipId);
+        if (clip && clip.startTime !== undefined && clip.endTime !== undefined) {
+
+            // If already editing this clip and playing...
+            if (editingClipId === subclipId && isPlaying) {
+                videoRef.current?.pause();
+                setIsPlaying(false);
+                return;
+            }
+
+            // Select the clip
+            setEditingClipId(clip.id);
+            setSelection([clip.startTime, clip.endTime]);
+            selectionRef.current = [clip.startTime, clip.endTime];
+            setCrop(clip.crop || { x: 0, y: 0, width: 1, height: 1 });
+            setIsCreating(true);
+            setIsCropping(true);
+
+            // Set up looping
+            setLoopRegion([clip.startTime, clip.endTime]);
+            setIsLooping(true);
+
+            // Start playing
+            if (videoRef.current) {
+                // If not already in range, seek
+                if (videoRef.current.currentTime < clip.startTime || videoRef.current.currentTime > clip.endTime) {
+                    videoRef.current.currentTime = clip.startTime;
+                    setCurrentTime(clip.startTime);
+                }
+                videoRef.current.play();
+                setIsPlaying(true);
+            }
+        }
+    }
 
     // --- Crop Inputs ---
     const [cropDragMode, setCropDragMode] = useState<'create' | 'move' | 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w' | null>(null);
@@ -507,6 +598,10 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
         const rect = e.currentTarget.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const clickTime = (x / rect.width) * duration;
+
+        // Stop looping on timeline click (seek)
+        setIsLooping(false);
+        setLoopRegion(null);
 
         // Find if we clicked on an existing clip
         // We iterate in reverse to find the "topmost" if overlap (though usually they are equal z)
@@ -797,15 +892,29 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                         </Box>
                     </Box>
                 )}
+
+                {/* Global Playhead - RESTORED as requested */}
+                <Box sx={{
+                    position: 'absolute',
+                    left: `${(currentTime / duration) * 100}%`,
+                    top: 0,
+                    bottom: 0,
+                    width: 2,
+                    bgcolor: 'white', // Changed to white as requested
+                    zIndex: 20,
+                    pointerEvents: 'none'
+                }} />
+
             </Box>
 
-            {/* List of clips below (Optional) */}
+            {/* List of clips below */}
             <Box sx={{ display: 'flex', gap: 1, mt: 2, overflowX: 'auto', pb: 1 }}>
                 {existingSubclips.map(clip => (
                     <DraggableSubclipThumbnail
                         key={clip.id}
                         clip={clip}
                         onDelete={handleDeleteClip}
+                        onPlayPause={handlePlaySubclipLoop}
                         onSelect={(id) => {
                             setEditingClipId(id);
                             if (clip.startTime !== undefined) {
@@ -818,6 +927,10 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                                 setCrop(clip.crop || { x: 0, y: 0, width: 1, height: 1 });
                                 setIsCreating(true);
                                 setIsCropping(true);
+
+                                // Disable looping if just selecting
+                                setIsLooping(false);
+                                setLoopRegion(null);
                             }
                         }}
                         isEditing={editingClipId === clip.id}

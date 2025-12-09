@@ -54,6 +54,8 @@ export default function ClassManager() {
 
     const handleDragStart = (event: DragStartEvent) => {
         setActiveId(event.active.id as string);
+        // Cancel hover preview immediately on drag start
+        setHoveredVideoId(null);
     };
 
     const handleDragEnd = (event: DragEndEvent) => {
@@ -283,6 +285,8 @@ export default function ClassManager() {
                                                     // "Remove from class" usually implies unassign.
                                                     useStore.getState().updateVideo(video.id, { classId: 'Unsorted' });
                                                 }
+                                                // Make sure hover preview is closed when removing
+                                                setHoveredVideoId(null);
                                             }}
                                         />
                                     ))}
@@ -306,6 +310,7 @@ export default function ClassManager() {
                 ) : null}
             </DragOverlay>
 
+            {/* Hover Preview - Only show if video exists */}
             {hoveredVideoData && (
                 <Paper sx={{
                     position: 'fixed',
@@ -345,6 +350,8 @@ export default function ClassManager() {
                             deleteRecording(confirmDeleteVideoId);
                             setConfirmDeleteVideoId(null);
                             setPreviewUrl(null);
+                            // Ensure hover preview is cleared on delete
+                            setHoveredVideoId(null);
                         }
                     }} color="error" autoFocus>
                         Delete

@@ -187,3 +187,23 @@ move the editor thrsahbin icon to the top right of each video thumbnail in the c
 remove the editor trashbin icon 
 call the preview in classlist panel on click the thumbnail
 all playback speeds should be 1x
+
+
+remove the throbber on the classlist thumbnails 
+
+remove the trashbin icon from the editor panel and make the edit button full width
+
+add a play/pause button to the subclip thumbnail in the editor to play the subclip in loop
+Ineed a scrub bar on the timeline it should indicate the subclip playhead position in the subclip
+
+there are 2 scrub bars , remove the global one and set the subclip scrub bar color to white 
+add a pause button to the subclip thumbnail in the editor to pause the subclip in loop
+on thumbnail click switch playback to the selected subclip.
+
+
+classlist preview should disappear when a thumbnail is removed
+
+you removed the wrong scrubber, put back the global one and remove the other one
+
+the scrub bar should be white.
+when clicking on the timeline or on the video payback buttons, the selected thumbnail should stop playing back and relaese the playhead 
