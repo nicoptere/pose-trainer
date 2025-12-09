@@ -75,6 +75,28 @@ function DraggableSubclipThumbnail({ clip, onDelete, onSelect, isEditing, onPlay
                 <Box sx={{ width: '100%', height: 40, bgcolor: 'rgba(0,0,0,0.2)', mb: 0.5 }} />
             )}
 
+            {/* Delete Button (Restored) */}
+            <IconButton
+                size="small"
+                sx={{
+                    position: 'absolute',
+                    top: 2,
+                    right: 2,
+                    bgcolor: 'rgba(0,0,0,0.3)',
+                    color: 'white',
+                    p: 0.2,
+                    '&:hover': { bgcolor: 'rgba(255,0,0,0.7)' },
+                    zIndex: 10
+                }}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(clip.id);
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+            >
+                <Delete fontSize="small" sx={{ fontSize: '1rem' }} />
+            </IconButton>
+
             <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between', px: 0.5 }}>
                 <Typography variant="caption" sx={{ color: 'white', fontWeight: 'bold', fontSize: '0.7rem' }}>
                     {clip.endTime !== undefined
@@ -740,9 +762,7 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
 
 
 
-                <IconButton onClick={handleStartCreation} color="secondary" title="Create Subclip">
-                    <Add />
-                </IconButton>
+
             </Box>
 
             {/* Timeline Editor Zone */}
