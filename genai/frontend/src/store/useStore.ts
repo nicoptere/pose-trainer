@@ -53,6 +53,7 @@ interface AppState {
 
   // Sync
   syncDataset: () => Promise<void>;
+  uploadFiles: (files: File[]) => Promise<void>;
 }
 
 export const useStore = create<AppState>()(
@@ -292,6 +293,26 @@ export const useStore = create<AppState>()(
       },
 
 
+
+      uploadFiles: async (files) => {
+        try {
+          const formData = new FormData();
+          files.forEach(f => formData.append('files', f));
+
+          const res = await fetch(`${API_URL}/api/upload`, {
+            method: 'POST',
+            body: formData
+          });
+
+          if (res.ok) {
+            await get().fetchDataset();
+          } else {
+            console.error("Upload failed");
+          }
+        } catch (e) {
+          console.error("Upload error", e);
+        }
+      },
 
       syncDataset: async () => {
         const state = get();

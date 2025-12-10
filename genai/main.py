@@ -135,6 +135,46 @@ def serve_frontend(path):
     else:
         return send_from_directory(static_folder, 'index.html')
 
+@app.route('/api/upload', methods=['POST'])
+def upload_files():
+    try:
+        if 'files' not in request.files:
+            return jsonify({'error': 'No files provided'}), 400
+        
+        files = request.files.getlist('files')
+        dataset_root = os.path.join(os.getcwd(), 'dataset')
+        unsorted_path = os.path.join(dataset_root, 'Unsorted')
+        
+        if not os.path.exists(unsorted_path):
+            os.makedirs(unsorted_path)
+            
+        saved_files = []
+        for file in files:
+            if file.filename == '':
+                continue
+            
+            # Basic sanitization
+            filename = "".join([c for c in file.filename if c.isalnum() or c in (' ', '-', '_', '.')]).strip()
+            if not filename: filename = f"upload_{int(time.time())}.mp4"
+            
+            # Context: Handle duplicates
+            target_path = os.path.join(unsorted_path, filename)
+            if os.path.exists(target_path):
+                base, ext = os.path.splitext(filename)
+                import time
+                target_path = os.path.join(unsorted_path, f"{base}_{int(time.time())}{ext}")
+            
+            file.save(target_path)
+            saved_files.append(filename)
+            
+        # Refresh metadata to include new files
+        scan_dataset(dataset_root)
+        
+        return jsonify({'success': True, 'files': saved_files}), 200
+    except Exception as e:
+        app.logger.error(f"Upload error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     # Run locally
     port = int(os.environ.get('PORT', 8080))

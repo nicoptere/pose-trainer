@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { DndContext, DragOverlay, DragStartEvent, DragEndEvent, useSensor, useSensors, PointerSensor } from '@dnd-kit/core';
-import { Box, Typography, TextField, Paper, InputAdornment, Button, Slider, IconButton, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
+import { Box, Typography, TextField, Paper, InputAdornment, Button, Slider, IconButton, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, CircularProgress } from '@mui/material';
 import { Search, Add, Close, Delete } from '@mui/icons-material';
 import { useStore } from '../store/useStore';
 import { DroppableClass } from './DroppableClass';
@@ -24,6 +24,8 @@ export default function ClassManager() {
     const [clickedSubclipId, setClickedSubclipId] = useState<string | null>(null); // To trigger edit mode in MediaBunny
     const [zoomLevel, setZoomLevel] = useState(128);
     const [confirmDeleteVideoId, setConfirmDeleteVideoId] = useState<string | null>(null);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [isDragOver, setIsDragOver] = useState(false);
 
     // Handle prefixed IDs from MediaBunny draggable
     const activeVideoIdRaw = activeId ? (activeId.startsWith('editor-') ? activeId.replace('editor-', '') : activeId) : null;
@@ -157,7 +159,38 @@ export default function ClassManager() {
                                 </Typography>
                             </Box>
 
-                            <Box sx={{ flex: 1, overflowY: 'auto', p: 1, display: 'flex', flexWrap: 'wrap', alignContent: 'flex-start' }}>
+                            <Box
+                                sx={{
+                                    flex: 1,
+                                    overflowY: 'auto',
+                                    p: 1,
+                                    display: 'flex',
+                                    flexWrap: 'wrap',
+                                    alignContent: 'flex-start',
+                                    bgcolor: isDragOver ? 'rgba(0, 0, 255, 0.1)' : 'transparent',
+                                    border: isDragOver ? '2px dashed #1976d2' : 'none',
+                                    transition: 'all 0.2s'
+                                }}
+                                onDragOver={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setIsDragOver(true);
+                                }}
+                                onDragLeave={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setIsDragOver(false);
+                                }}
+                                onDrop={async (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setIsDragOver(false);
+                                    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                                        const files = Array.from(e.dataTransfer.files);
+                                        await useStore.getState().uploadFiles(files);
+                                    }
+                                }}
+                            >
                                 <DroppableClass id="Unsorted" title="">
                                     {unsortedVideos.map(video => (
                                         <DraggableVideo
@@ -232,11 +265,18 @@ export default function ClassManager() {
                         <Button
                             variant="contained"
                             color="secondary"
+                            disabled={isSyncing}
+                            startIcon={isSyncing ? <CircularProgress size={20} color="inherit" /> : null}
                             onClick={async () => {
-                                await useStore.getState().syncDataset();
+                                setIsSyncing(true);
+                                try {
+                                    await useStore.getState().syncDataset();
+                                } finally {
+                                    setIsSyncing(false);
+                                }
                             }}
                         >
-                            Commit Changes
+                            Commit
                         </Button>
                     </Box>
 

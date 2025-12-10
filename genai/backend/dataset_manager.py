@@ -29,6 +29,19 @@ def sync_dataset(metadata, dataset_root):
     
     classes_map = {c['id']: c['name'] for c in metadata.get('classes', [])}
 
+    # Read existing metadata BEFORE scan_dataset overwrites it
+    old_subclips_map = {}
+    metadata_path = os.path.join(dataset_root, 'metadata.json')
+    if os.path.exists(metadata_path):
+        try:
+            with open(metadata_path, 'r', encoding='utf-8') as f:
+                old_meta = json.load(f)
+                for c in old_meta.get('classes', []):
+                    if 'subclips' in c:
+                        for sc in c['subclips']:
+                            old_subclips_map[sc['id']] = sc
+        except: pass
+
     # 1. Recover Source Videos from Disk (Preserve Inputs)
     # The frontend might send a partial list of sourceVideos. We MUST NOT delete existing source videos on disk.
     # We treat the Disk as the Authority for what Source Videos exist.
@@ -39,6 +52,9 @@ def sync_dataset(metadata, dataset_root):
     disk_source_videos = []
     for group in current_disk_state:
         for v in group['videos']:
+            # Double check to ensure we DON'T add subclips to sourceVideos
+            if v['id'].startswith('subclip-'): continue
+
             # We assume everything on disk is a potential source video if it's not a known subclip?
             # Actually, scan_dataset returns everything.
             # We want to ensure 'videos' list (used for desired_files) includes ALL these.
@@ -129,6 +145,10 @@ def sync_dataset(metadata, dataset_root):
         
         # Target Filename
         if is_subclip:
+            # SKIP subclips in Unsorted (virtual only)
+            if class_id == 'Unsorted':
+                continue
+
             ext = '.mp4'
             if source_url:
                 _, ext = os.path.splitext(source_url)
@@ -151,7 +171,8 @@ def sync_dataset(metadata, dataset_root):
             'end': end_time,
             'is_subclip': is_subclip,
             'id': video.get('id'),
-            'crop': video.get('crop')
+            'crop': video.get('crop'),
+            'thumbnailUrl': video.get('thumbnailUrl')
         }
 
     # 3. Cleanup Phase
@@ -200,8 +221,25 @@ def sync_dataset(metadata, dataset_root):
     # 4. Creation Phase
     for target_path, info in desired_files.items():
         if os.path.exists(target_path):
-            stats['skipped'] += 1
-            continue
+            # Check for changes if it's a subclip
+            should_recompute = False
+            if info['is_subclip']:
+                old_sc = old_subclips_map.get(info['id'])
+                if old_sc:
+                    # Compare key properties
+                    # We use a small epsilon for floats if needed, but equality is usually fine for JSON roundtrip
+                    # Or check thumbnailUrl as user suggested (data url change)
+                    # We check both to be safe.
+                    if (old_sc.get('startTime') != info['start'] or 
+                        old_sc.get('endTime') != info['end'] or
+                        old_sc.get('crop') != info['crop'] or
+                        old_sc.get('thumbnailUrl') != info.get('thumbnailUrl')):
+                        print(f"Subclip {info['id']} updated, recomputing...")
+                        should_recompute = True
+            
+            if not should_recompute:
+                stats['skipped'] += 1
+                continue
             
         try:
             print(f"Creating {target_path} from {info['source']} ...".encode('utf-8', errors='replace').decode('utf-8'))
