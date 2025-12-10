@@ -211,3 +211,17 @@ when clicking on the timeline or on the video payback buttons, the selected thum
 put back the trashbin icon in the top right corner of the editor thumbnails 
 
 remove the + button from the editor panel
+
+=== day 2 
+
+I need the Flask backend (main.py) to manage the videos based on dataset/metadata.json file: 
+- list the videos available in the "dataset" folder and update the metadata JSON if new files are available on disk
+- send that list to the frontend
+Frontend should display the list of videos in the collection panel.
+
+the frontend should compile to a dist folder and be served by the Flask backend.
+
+
+- when the user exports the JSON, I need the dataset folder structure to be populated and updated 
+- classes are folder names
+- the subclips are video files, cropped  using the rect coordinates from the subclips

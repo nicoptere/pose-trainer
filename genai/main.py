@@ -1,8 +1,12 @@
 import os
 import json
-from flask import Flask, request, jsonify
+import sys
+
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from dataset_manager import sync_dataset
+
+# Import from backend package
+from backend.dataset_manager import sync_dataset, scan_dataset
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -19,7 +23,6 @@ def sync_dataset_endpoint():
             return jsonify({'error': 'No JSON data provided'}), 400
         
         # Define dataset root directory
-        # Using a folder named 'dataset' in the current working directory
         dataset_root = os.path.join(os.getcwd(), 'dataset')
         
         # Trigger synchronization
@@ -33,6 +36,104 @@ def sync_dataset_endpoint():
     except Exception as e:
         app.logger.error(f"Sync error: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/videos', methods=['GET'])
+def list_videos():
+    try:
+        dataset_root = os.path.join(os.getcwd(), 'dataset')
+        if not os.path.exists(dataset_root):
+             os.makedirs(dataset_root)
+             
+        # Scan and get grouped structure
+        data = scan_dataset(dataset_root)
+        return jsonify(data), 200
+    except Exception as e:
+        app.logger.error(f"List videos error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/videos/<path:filename>')
+def serve_video(filename):
+    dataset_root = os.path.join(os.getcwd(), 'dataset')
+    return send_from_directory(dataset_root, filename)
+
+@app.route('/api/classes', methods=['POST'])
+def add_class():
+    try:
+        data = request.json
+        name = data.get('name')
+        if not name:
+            return jsonify({'error': 'Invalid class name'}), 400
+        
+        # Sanitize
+        safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '-', '_')]).strip()
+        if not safe_name:
+            return jsonify({'error': 'Invalid class name'}), 400
+            
+        dataset_root = os.path.join(os.getcwd(), 'dataset')
+        class_path = os.path.join(dataset_root, safe_name)
+        
+        if not os.path.exists(class_path):
+            os.makedirs(class_path)
+            
+        # Update metadata.json to include this new class
+        scan_dataset(dataset_root)
+            
+        return jsonify({'success': True, 'name': safe_name}), 200
+    except Exception as e:
+        app.logger.error(f"Add class error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/classes', methods=['DELETE'])
+def delete_class():
+    try:
+        data = request.json
+        name = data.get('name')
+        if not name or name == 'Unsorted':
+            return jsonify({'error': 'Invalid class name'}), 400
+            
+        dataset_root = os.path.join(os.getcwd(), 'dataset')
+        class_path = os.path.join(dataset_root, name)
+        
+        if os.path.exists(class_path):
+            # Move videos to Unsorted
+            unsorted_path = os.path.join(dataset_root, 'Unsorted')
+            if not os.path.exists(unsorted_path):
+                os.makedirs(unsorted_path)
+                
+            for f in os.listdir(class_path):
+                src = os.path.join(class_path, f)
+                if os.path.isfile(src):
+                    dst = os.path.join(unsorted_path, f)
+                    # Handle name collision
+                    if os.path.exists(dst):
+                        base, ext = os.path.splitext(f)
+                        import time
+                        dst = os.path.join(unsorted_path, f"{base}_{int(time.time())}{ext}")
+                    os.rename(src, dst)
+            
+            try:
+                os.rmdir(class_path)
+            except OSError:
+                # Directory not empty?
+                pass
+                
+        # Update metadata
+        scan_dataset(dataset_root)
+        
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        app.logger.error(f"Delete class error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# Serve React Static Files
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_frontend(path):
+    static_folder = os.path.join(os.getcwd(), 'frontend', 'out')
+    if path != "" and os.path.exists(os.path.join(static_folder, path)):
+        return send_from_directory(static_folder, path)
+    else:
+        return send_from_directory(static_folder, 'index.html')
 
 if __name__ == '__main__':
     # Run locally

@@ -8,7 +8,6 @@ import { useStore } from '../store/useStore';
 import { DroppableClass } from './DroppableClass';
 import { DraggableVideo } from './DraggableVideo';
 import MediaBunny from './MediaBunny';
-import CroppedVideoPreview from './CroppedVideoPreview';
 
 export default function ClassManager() {
     const classes = useStore((state) => state.classes);
@@ -24,21 +23,7 @@ export default function ClassManager() {
     const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
     const [clickedSubclipId, setClickedSubclipId] = useState<string | null>(null); // To trigger edit mode in MediaBunny
     const [zoomLevel, setZoomLevel] = useState(128);
-    const [hoveredVideoId, setHoveredVideoId] = useState<string | null>(null);
-    const [hoverPos, setHoverPos] = useState({ x: 0, y: 0 });
     const [confirmDeleteVideoId, setConfirmDeleteVideoId] = useState<string | null>(null);
-
-    const handleVideoHover = (e: React.MouseEvent, id: string) => {
-        setHoveredVideoId(id);
-        setHoverPos({ x: e.clientX, y: e.clientY });
-    };
-
-    const hoveredVideoData = hoveredVideoId ? videos.find(v => v.id === hoveredVideoId) : null;
-
-    // Use callback to stabilize function reference and prevent infinite loop in CroppedVideoPreview
-    const handlePreviewReady = useCallback((id: string) => {
-        useStore.getState().updateVideo(id, { previewDirty: false });
-    }, []);
 
     // Handle prefixed IDs from MediaBunny draggable
     const activeVideoIdRaw = activeId ? (activeId.startsWith('editor-') ? activeId.replace('editor-', '') : activeId) : null;
@@ -54,8 +39,6 @@ export default function ClassManager() {
 
     const handleDragStart = (event: DragStartEvent) => {
         setActiveId(event.active.id as string);
-        // Cancel hover preview immediately on drag start
-        setHoveredVideoId(null);
     };
 
     const handleDragEnd = (event: DragEndEvent) => {
@@ -186,8 +169,6 @@ export default function ClassManager() {
                                             width={zoomLevel}
                                             color={video.color}
                                             onClick={() => setPreviewUrl(video.url)}
-                                            onHover={handleVideoHover}
-                                            onLeave={() => setHoveredVideoId(null)}
                                             onDelete={() => setConfirmDeleteVideoId(video.id)}
                                         />
                                     ))}
@@ -273,9 +254,17 @@ export default function ClassManager() {
                                             width={80}
                                             color={video.color}
                                             startTime={video.startTime}
-                                            onClick={() => setPreviewUrl(video.url)}
-                                            onHover={handleVideoHover}
-                                            onLeave={() => setHoveredVideoId(null)}
+                                            onClick={() => {
+                                                if (video.parentVideoId) {
+                                                    setIsEditing(true);
+                                                    setEditingVideoId(video.parentVideoId);
+                                                    setClickedSubclipId(video.id);
+                                                } else {
+                                                    setIsEditing(true);
+                                                    setEditingVideoId(video.id);
+                                                    setClickedSubclipId(null);
+                                                }
+                                            }}
                                             onDelete={() => {
                                                 if (video.parentVideoId) {
                                                     // Start/End are defined, it's a subclip. Unassign to show in editor again.
@@ -285,8 +274,6 @@ export default function ClassManager() {
                                                     // "Remove from class" usually implies unassign.
                                                     useStore.getState().updateVideo(video.id, { classId: 'Unsorted' });
                                                 }
-                                                // Make sure hover preview is closed when removing
-                                                setHoveredVideoId(null);
                                             }}
                                         />
                                     ))}
@@ -310,29 +297,6 @@ export default function ClassManager() {
                 ) : null}
             </DragOverlay>
 
-            {/* Hover Preview - Only show if video exists */}
-            {hoveredVideoData && (
-                <Paper sx={{
-                    position: 'fixed',
-                    left: hoverPos.x + 20,
-                    top: hoverPos.y,
-                    zIndex: 9999,
-                    pointerEvents: 'none',
-                    overflow: 'hidden'
-                }}>
-                    <CroppedVideoPreview
-                        videoUrl={hoveredVideoData.url}
-                        startTime={hoveredVideoData.startTime}
-                        endTime={hoveredVideoData.endTime}
-                        crop={hoveredVideoData.crop}
-                        maxWidth={200}
-                        color={hoveredVideoData.color}
-                        videoId={hoveredVideoData.id}
-                        onPreviewReady={handlePreviewReady}
-                    />
-                </Paper>
-            )}
-
             <Dialog
                 open={!!confirmDeleteVideoId}
                 onClose={() => setConfirmDeleteVideoId(null)}
@@ -350,8 +314,6 @@ export default function ClassManager() {
                             deleteRecording(confirmDeleteVideoId);
                             setConfirmDeleteVideoId(null);
                             setPreviewUrl(null);
-                            // Ensure hover preview is cleared on delete
-                            setHoveredVideoId(null);
                         }
                     }} color="error" autoFocus>
                         Delete

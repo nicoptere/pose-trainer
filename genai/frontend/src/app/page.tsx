@@ -37,8 +37,11 @@ function CustomTabPanel(props: TabPanelProps) {
 export default function Home() {
   const fetchDataset = useStore((state) => state.fetchDataset);
   const [tabIndex, setTabIndex] = useState(0);
+  const dataFetchedRef = React.useRef(false);
 
   React.useEffect(() => {
+    if (dataFetchedRef.current) return;
+    dataFetchedRef.current = true;
     fetchDataset();
   }, []);
 

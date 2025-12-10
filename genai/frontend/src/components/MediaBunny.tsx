@@ -15,6 +15,12 @@ interface Props {
 }
 
 // Draggable Thumbnail Component for DnD-Kit integration
+function formatTime(s: number) {
+    const mins = Math.floor(s / 60);
+    const secs = Math.floor(s % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
 function DraggableSubclipThumbnail({ clip, onDelete, onSelect, isEditing, onPlayPause }: {
     clip: VideoClip,
     onDelete: (id: string) => void,
@@ -669,15 +675,35 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
         }
     }, [hoveredClip]);
 
-    // Timeline Frame Preview logic
+    // Idle Detection for "Collapsing" Editor Controls
+    const [isUserIdle, setIsUserIdle] = useState(false);
+    const idleTimer = useRef<NodeJS.Timeout | null>(null);
+
+    const onUserActivity = () => {
+        setIsUserIdle(false);
+        if (idleTimer.current) clearTimeout(idleTimer.current);
+        idleTimer.current = setTimeout(() => {
+            if (isPlaying && !isCropping && !isCreating) { // Only hide if playing and not actively cropping
+                setIsUserIdle(true);
+            }
+        }, 3000);
+    };
+
     useEffect(() => {
-        if (timelineHoverTime !== null && timelinePreviewRef.current) {
-            timelinePreviewRef.current.currentTime = timelineHoverTime;
+        if (idleTimer.current) clearTimeout(idleTimer.current);
+        onUserActivity(); // Start timer
+        return () => {
+            if (idleTimer.current) clearTimeout(idleTimer.current);
         }
-    }, [timelineHoverTime]);
+    }, [isPlaying, isCropping, isCreating]);
 
     return (
-        <Box sx={{ p: 2, bgcolor: '#000', color: 'white', borderRadius: 2, position: 'relative' }}>
+        <Box
+            sx={{ p: 2, bgcolor: '#000', color: 'white', borderRadius: 2, position: 'relative' }}
+            onMouseMove={onUserActivity}
+            onPointerDown={onUserActivity}
+            onClick={onUserActivity}
+        >
 
             {/* Main Player Container with Crop Overlay */}
             <Box
@@ -700,7 +726,7 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                     crossOrigin="anonymous"
                 />
 
-                {/* Crop Overlay */}
+                {/* Crop Overlay - Fade out when idle */}
                 {crop && (
                     <Box sx={{
                         position: 'absolute',
@@ -712,7 +738,9 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                         bgcolor: editingClipId ? `${existingSubclips.find(c => c.id === editingClipId)?.color}22` : 'rgba(0,255,0,0.1)',
                         pointerEvents: 'auto',
                         cursor: 'move',
-                        boxSizing: 'border-box'
+                        boxSizing: 'border-box',
+                        opacity: isUserIdle ? 0 : 1,
+                        transition: 'opacity 0.5s ease',
                     }}
                         onPointerDown={(e) => handleCropPointerDown(e, 'move')}
                     >
@@ -744,229 +772,228 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                 )}
             </Box>
 
-            {/* Controls */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                <IconButton onClick={handlePlayPause} color="primary">
-                    {isPlaying ? <Pause /> : <PlayArrow />}
-                </IconButton>
-                <Typography variant="caption">{formatTime(currentTime)} / {formatTime(duration)}</Typography>
+            {/* Controls - Fade out when idle */}
+            <Box sx={{
+                opacity: isUserIdle ? 0 : 1,
+                transition: 'opacity 0.5s ease',
+                pointerEvents: isUserIdle ? 'none' : 'auto'
+            }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                    <IconButton onClick={handlePlayPause} color="primary">
+                        {isPlaying ? <Pause /> : <PlayArrow />}
+                    </IconButton>
+                    <Typography variant="caption">{formatTime(currentTime)} / {formatTime(duration)}</Typography>
 
-                <Slider
-                    size="small"
-                    min={0}
-                    max={duration || 100}
-                    value={currentTime}
-                    onChange={handleSeek}
-                    sx={{ flex: 1, mx: 2 }}
-                />
+                    <Slider
+                        size="small"
+                        min={0}
+                        max={duration || 100}
+                        value={currentTime}
+                        onChange={handleSeek}
+                        sx={{ flex: 1, mx: 2 }}
+                    />
+                </Box>
 
+                {/* Timeline Editor Zone */}
+                <Box
+                    ref={timelineRef}
+                    sx={{ position: 'relative', height: 60, mt: 2, bgcolor: '#222', borderRadius: 1, overflow: 'hidden', cursor: 'pointer' }}
+                    onClick={handleTimelineClick}
+                    onMouseMove={(e) => {
+                        onUserActivity(); // Ensure moving on timeline keeps it awake
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const x = e.clientX - rect.left;
+                        const time = (x / rect.width) * duration;
+                        setTimelineHoverTime(time);
+                        setTimelineHoverPos({ x: e.clientX, y: rect.top - 100 });
+                    }}
+                    onMouseLeave={() => setTimelineHoverTime(null)}
+                    // Double Click to create immediate subclip
+                    onDoubleClick={async (e) => {
+                        if (!parentVideo || !videoRef.current) return;
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const x = e.clientX - rect.left;
+                        const startTime = (x / rect.width) * duration;
+                        const endTime = Math.min(startTime + 5.0, duration);
 
-
-
-            </Box>
-
-            {/* Timeline Editor Zone */}
-            <Box
-                ref={timelineRef}
-                sx={{ position: 'relative', height: 60, mt: 2, bgcolor: '#222', borderRadius: 1, overflow: 'hidden', cursor: 'pointer' }}
-                onClick={handleTimelineClick}
-                onMouseMove={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const x = e.clientX - rect.left;
-                    const time = (x / rect.width) * duration;
-                    setTimelineHoverTime(time);
-                    setTimelineHoverPos({ x: e.clientX, y: rect.top - 100 });
-                }}
-                onMouseLeave={() => setTimelineHoverTime(null)}
-                // Double Click to create immediate subclip
-                onDoubleClick={async (e) => {
-                    if (!parentVideo || !videoRef.current) return;
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const x = e.clientX - rect.left;
-                    const startTime = (x / rect.width) * duration;
-                    const endTime = Math.min(startTime + 5.0, duration);
-
-                    // Capture thumbnail
-                    videoRef.current.currentTime = startTime;
-                    await new Promise(r => setTimeout(r, 200));
-                    const thumbnail = captureThumbnail(startTime);
-
-                    const color = getRandomColor();
-                    const initialCrop = { x: 0, y: 0, width: 1, height: 1 };
-                    const newId = addSubclip(parentVideo, startTime, endTime, color, thumbnail, initialCrop);
-
-                    // Immediately select and edit the new clip
-                    setEditingClipId(newId);
-                    setSelection([startTime, endTime]);
-                    selectionRef.current = [startTime, endTime];
-                    setCrop(initialCrop);
-                    setIsCreating(true);
-                    setIsCropping(true); // Enable interaction
-
-                    // Ensure UI is synced
-                    if (videoRef.current) {
+                        // Capture thumbnail
                         videoRef.current.currentTime = startTime;
-                        setCurrentTime(startTime);
-                    }
-                }}
-            >
-                {/* Existing Clips Markers */}
-                {existingSubclips.map(clip => (
-                    clip.startTime !== undefined && clip.endTime !== undefined && (
-                        <Box
-                            key={clip.id}
-                            sx={{
-                                position: 'absolute',
-                                left: `${(clip.startTime / duration) * 100}%`,
-                                width: `${((clip.endTime - clip.startTime) / duration) * 100}%`,
-                                height: '100%',
-                                bgcolor: clip.color || 'gray',
-                                opacity: 0.6,
-                                border: editingClipId === clip.id ? '2px solid white' : 'none',
-                                boxSizing: 'border-box',
-                                borderLeft: '2px solid rgba(0,0,0,0.5)',
-                                borderRight: '2px solid rgba(0,0,0,0.5)',
-                                cursor: 'pointer',
-                                pointerEvents: isCreating ? 'none' : 'auto'
-                            }}
-                            onMouseDown={(e) => {
-                                e.stopPropagation();
-                                setEditingClipId(clip.id);
-                                setSelection([clip.startTime!, clip.endTime!]);
-                                selectionRef.current = [clip.startTime!, clip.endTime!];
-                                setIsCreating(true);
-                            }}
-                            onMouseEnter={(e) => {
-                                setHoveredClip(clip);
-                                setHoverPosition({ x: e.clientX, y: e.clientY - 150 });
-                            }}
-                            onMouseLeave={() => setHoveredClip(null)}
-                        />
-                    )
-                ))}
+                        await new Promise(r => setTimeout(r, 200));
+                        const thumbnail = captureThumbnail(startTime);
 
-                {/* Active Creation Zone (Overlay) */}
-                {isCreating && (
+                        const color = getRandomColor();
+                        const initialCrop = { x: 0, y: 0, width: 1, height: 1 };
+                        const newId = addSubclip(parentVideo, startTime, endTime, color, thumbnail, initialCrop);
+
+                        // Immediately select and edit the new clip
+                        setEditingClipId(newId);
+                        setSelection([startTime, endTime]);
+                        selectionRef.current = [startTime, endTime];
+                        setCrop(initialCrop);
+                        setIsCreating(true);
+                        setIsCropping(true); // Enable interaction
+
+                        // Ensure UI is synced
+                        if (videoRef.current) {
+                            videoRef.current.currentTime = startTime;
+                            setCurrentTime(startTime);
+                        }
+                    }}
+                >
+                    {/* Existing Clips Markers */}
+                    {existingSubclips.map(clip => (
+                        clip.startTime !== undefined && clip.endTime !== undefined && (
+                            <Box
+                                key={clip.id}
+                                sx={{
+                                    position: 'absolute',
+                                    left: `${(clip.startTime / duration) * 100}%`,
+                                    width: `${((clip.endTime - clip.startTime) / duration) * 100}%`,
+                                    height: '100%',
+                                    bgcolor: clip.color || 'gray',
+                                    opacity: 0.6,
+                                    border: editingClipId === clip.id ? '2px solid white' : 'none',
+                                    boxSizing: 'border-box',
+                                    borderLeft: '2px solid rgba(0,0,0,0.5)',
+                                    borderRight: '2px solid rgba(0,0,0,0.5)',
+                                    cursor: 'pointer',
+                                    pointerEvents: isCreating ? 'none' : 'auto'
+                                }}
+                                onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    setEditingClipId(clip.id);
+                                    setSelection([clip.startTime!, clip.endTime!]);
+                                    selectionRef.current = [clip.startTime!, clip.endTime!];
+                                    setIsCreating(true);
+                                }}
+                                onMouseEnter={(e) => {
+                                    setHoveredClip(clip);
+                                    setHoverPosition({ x: e.clientX, y: e.clientY - 150 });
+                                }}
+                                onMouseLeave={() => setHoveredClip(null)}
+                            />
+                        )
+                    ))}
+
+                    {/* Active Creation Zone (Overlay) */}
+                    {isCreating && (
+                        <Box sx={{
+                            position: 'absolute',
+                            left: 0, right: 0, top: 0, bottom: 0,
+                            zIndex: 10,
+                            pointerEvents: 'none'
+                        }}>
+                            {/* Selected Area - Full Height */}
+                            <Box
+                                sx={{
+                                    position: 'absolute',
+                                    left: `${(selection[0] / duration) * 100}%`,
+                                    width: `${((selection[1] - selection[0]) / duration) * 100}%`,
+                                    top: 0,
+                                    bottom: 0,
+                                    bgcolor: editingClipId ? 'rgba(255, 165, 0, 0.4)' : 'rgba(255, 255, 0, 0.4)',
+                                    border: '2px solid white',
+                                    boxSizing: 'border-box',
+                                    pointerEvents: 'auto',
+                                    cursor: dragMode === 'move' ? 'grabbing' : 'grab',
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                    alignItems: 'center'
+                                }}
+                                onPointerDown={(e) => handleDragStart(e, 'move')}
+                            >
+                                <Box sx={{ width: 40, height: 4, bgcolor: 'rgba(255,255,255,0.5)', borderRadius: 2 }} />
+                            </Box>
+
+                            {/* Resume Left Handle (Start) */}
+                            <Box
+                                onPointerDown={(e) => handleDragStart(e, 'resize-start')}
+                                sx={{
+                                    position: 'absolute',
+                                    left: `calc(${(selection[0] / duration) * 100}% - 10px)`,
+                                    width: 20,
+                                    top: 0, bottom: 0,
+                                    cursor: 'ew-resize',
+                                    zIndex: 12,
+                                    pointerEvents: 'auto',
+                                    display: 'flex', justifyContent: 'center', alignItems: 'center',
+                                    '&:hover > div': { bgcolor: 'white' }
+                                }}
+                            >
+                                <Box sx={{ width: 4, height: '60%', bgcolor: 'rgba(255,255,255,0.7)', borderRadius: 1 }} />
+                            </Box>
+
+                            {/* Resume Right Handle (End) */}
+                            <Box
+                                onPointerDown={(e) => handleDragStart(e, 'resize-end')}
+                                sx={{
+                                    position: 'absolute',
+                                    left: `calc(${(selection[1] / duration) * 100}% - 10px)`,
+                                    width: 20,
+                                    top: 0, bottom: 0,
+                                    cursor: 'ew-resize',
+                                    zIndex: 12,
+                                    pointerEvents: 'auto',
+                                    display: 'flex', justifyContent: 'center', alignItems: 'center',
+                                    '&:hover > div': { bgcolor: 'white' }
+                                }}
+                            >
+                                <Box sx={{ width: 4, height: '60%', bgcolor: 'rgba(255,255,255,0.7)', borderRadius: 1 }} />
+                            </Box>
+                        </Box>
+                    )}
+
+                    {/* Global Playhead - RESTORED as requested */}
                     <Box sx={{
                         position: 'absolute',
-                        left: 0, right: 0, top: 0, bottom: 0,
-                        zIndex: 10,
+                        left: `${(currentTime / duration) * 100}%`,
+                        top: 0,
+                        bottom: 0,
+                        width: 2,
+                        bgcolor: 'white', // Changed to white as requested
+                        zIndex: 20,
                         pointerEvents: 'none'
-                    }}>
-                        {/* Selected Area - Full Height */}
-                        <Box
-                            sx={{
-                                position: 'absolute',
-                                left: `${(selection[0] / duration) * 100}%`,
-                                width: `${((selection[1] - selection[0]) / duration) * 100}%`,
-                                top: 0,
-                                bottom: 0,
-                                bgcolor: editingClipId ? 'rgba(255, 165, 0, 0.4)' : 'rgba(255, 255, 0, 0.4)',
-                                border: '2px solid white',
-                                boxSizing: 'border-box',
-                                pointerEvents: 'auto',
-                                cursor: dragMode === 'move' ? 'grabbing' : 'grab',
-                                display: 'flex',
-                                justifyContent: 'center',
-                                alignItems: 'center'
-                            }}
-                            onPointerDown={(e) => handleDragStart(e, 'move')}
-                        >
-                            <Box sx={{ width: 40, height: 4, bgcolor: 'rgba(255,255,255,0.5)', borderRadius: 2 }} />
-                        </Box>
+                    }} />
 
-                        {/* Resume Left Handle (Start) */}
-                        <Box
-                            onPointerDown={(e) => handleDragStart(e, 'resize-start')}
-                            sx={{
-                                position: 'absolute',
-                                left: `calc(${(selection[0] / duration) * 100}% - 10px)`,
-                                width: 20,
-                                top: 0, bottom: 0,
-                                cursor: 'ew-resize',
-                                zIndex: 12,
-                                pointerEvents: 'auto',
-                                display: 'flex', justifyContent: 'center', alignItems: 'center',
-                                '&:hover > div': { bgcolor: 'white' }
-                            }}
-                        >
-                            <Box sx={{ width: 4, height: '60%', bgcolor: 'rgba(255,255,255,0.7)', borderRadius: 1 }} />
-                        </Box>
+                </Box>
 
-                        {/* Resume Right Handle (End) */}
-                        <Box
-                            onPointerDown={(e) => handleDragStart(e, 'resize-end')}
-                            sx={{
-                                position: 'absolute',
-                                left: `calc(${(selection[1] / duration) * 100}% - 10px)`,
-                                width: 20,
-                                top: 0, bottom: 0,
-                                cursor: 'ew-resize',
-                                zIndex: 12,
-                                pointerEvents: 'auto',
-                                display: 'flex', justifyContent: 'center', alignItems: 'center',
-                                '&:hover > div': { bgcolor: 'white' }
-                            }}
-                        >
-                            <Box sx={{ width: 4, height: '60%', bgcolor: 'rgba(255,255,255,0.7)', borderRadius: 1 }} />
-                        </Box>
-                    </Box>
-                )}
+                {/* List of clips below */}
+                <Box sx={{ display: 'flex', gap: 1, mt: 2, overflowX: 'auto', pb: 1 }}>
+                    {existingSubclips.map(clip => (
+                        <DraggableSubclipThumbnail
+                            key={clip.id}
+                            clip={clip}
+                            onDelete={handleDeleteClip}
+                            onPlayPause={handlePlaySubclipLoop}
+                            onSelect={(id) => {
+                                setEditingClipId(id);
+                                if (clip.startTime !== undefined) {
+                                    setSelection([clip.startTime, clip.endTime || clip.startTime + 5.0]);
+                                    selectionRef.current = [clip.startTime, clip.endTime || clip.startTime + 5.0];
+                                    if (videoRef.current) {
+                                        videoRef.current.currentTime = clip.startTime;
+                                        setCurrentTime(clip.startTime);
+                                    }
+                                    setCrop(clip.crop || { x: 0, y: 0, width: 1, height: 1 });
+                                    setIsCreating(true);
+                                    setIsCropping(true);
 
-                {/* Global Playhead - RESTORED as requested */}
-                <Box sx={{
-                    position: 'absolute',
-                    left: `${(currentTime / duration) * 100}%`,
-                    top: 0,
-                    bottom: 0,
-                    width: 2,
-                    bgcolor: 'white', // Changed to white as requested
-                    zIndex: 20,
-                    pointerEvents: 'none'
-                }} />
-
-            </Box>
-
-            {/* List of clips below */}
-            <Box sx={{ display: 'flex', gap: 1, mt: 2, overflowX: 'auto', pb: 1 }}>
-                {existingSubclips.map(clip => (
-                    <DraggableSubclipThumbnail
-                        key={clip.id}
-                        clip={clip}
-                        onDelete={handleDeleteClip}
-                        onPlayPause={handlePlaySubclipLoop}
-                        onSelect={(id) => {
-                            setEditingClipId(id);
-                            if (clip.startTime !== undefined) {
-                                setSelection([clip.startTime, clip.endTime || clip.startTime + 5.0]);
-                                selectionRef.current = [clip.startTime, clip.endTime || clip.startTime + 5.0];
-                                if (videoRef.current) {
-                                    videoRef.current.currentTime = clip.startTime;
-                                    setCurrentTime(clip.startTime);
+                                    // Disable looping if just selecting
+                                    setIsLooping(false);
+                                    setLoopRegion(null);
                                 }
-                                setCrop(clip.crop || { x: 0, y: 0, width: 1, height: 1 });
-                                setIsCreating(true);
-                                setIsCropping(true);
+                            }}
+                            isEditing={editingClipId === clip.id}
+                        />
+                    ))}
+                </Box>
 
-                                // Disable looping if just selecting
-                                setIsLooping(false);
-                                setLoopRegion(null);
-                            }
-                        }}
-                        isEditing={editingClipId === clip.id}
-                    />
-                ))}
+                <Typography variant="caption" color="gray" sx={{ mt: 1, display: 'block' }}>
+                    Double-click timeline to add clip. Drag yellow region to move/resize.
+                </Typography>
             </Box>
-
-            <Typography variant="caption" color="gray" sx={{ mt: 1, display: 'block' }}>
-                Double-click timeline to add clip. Drag yellow region to move/resize.
-            </Typography>
         </Box>
     );
 }
 
-function formatTime(s: number) {
-    const mins = Math.floor(s / 60);
-    const secs = Math.floor(s % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
+

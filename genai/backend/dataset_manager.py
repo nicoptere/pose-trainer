@@ -172,6 +172,10 @@ def sync_dataset(metadata, dataset_root):
             if source.startswith('file:///'):
                 source = source.replace('file:///', '') # Windows/Linux
             
+            # Handle /api/videos prefix
+            if source.startswith('/api/videos/'):
+                source = source.replace('/api/videos/', '')
+            
             # Use MoviePy
             if not os.path.exists(source):
                 # Try relative to CWD?
@@ -200,6 +204,127 @@ def sync_dataset(metadata, dataset_root):
 
     return stats
 
+def scan_dataset(dataset_root):
+    """
+    Scans the dataset folder for video files and classes (folders).
+    Updates metadata.json.
+    Returns the grouped structure expected by the frontend.
+    """
+    metadata_path = os.path.join(dataset_root, 'metadata.json')
+    
+    meta = {}
+    if os.path.exists(metadata_path):
+        try:
+            with open(metadata_path, 'r', encoding='utf-8') as f:
+                meta = json.load(f)
+        except Exception as e:
+            print(f"Error loading metadata: {e}")
+            
+    if 'classes' not in meta: meta['classes'] = []
+    if 'sourceVideos' not in meta: meta['sourceVideos'] = []
+    
+    existing_classes = {c['id']: c for c in meta['classes']}
+    # video ID -> video object
+    existing_videos = {v['id']: v for v in meta['sourceVideos']}
+    
+    found_video_objs = []
+    found_class_names = set()
+    
+    # 1. Scan filesystem
+    for root, dirs, files in os.walk(dataset_root):
+        # Avoid processing reserved Windows names or hidden folders
+        for excluded in ['nul', 'con', 'prn', 'aux', '__pycache__', '.git']:
+            if excluded in dirs:
+                dirs.remove(excluded)
+                
+        try:
+            rel_root = os.path.relpath(root, dataset_root)
+        except ValueError:
+            continue
+        
+        # Directories in root are classes
+        if rel_root == '.':
+            for d in dirs:
+                found_class_names.add(d)
+        else:
+            # Subdirectories implies we are inside a Class
+            # Just take top level folder as class
+            top_class = rel_root.split(os.sep)[0]
+            found_class_names.add(top_class)
+            
+        for f in files:
+            if f.lower().endswith(('.mp4', '.mov', '.webm', '.mkv', '.avi')):
+                full_path = os.path.join(root, f)
+                # rel_path is the ID, e.g. "Unsorted/video.mp4"
+                rel_path = os.path.relpath(full_path, dataset_root).replace('\\', '/')
+                
+                # Deduce class from path
+                parts = rel_path.split('/')
+                if len(parts) > 1:
+                    vid_class_id = parts[0]
+                else:
+                    vid_class_id = 'Unsorted'
+                
+                # Build/Update video object
+                if rel_path in existing_videos:
+                    vid_obj = existing_videos[rel_path]
+                    # Ensure path is correct format for frontend
+                    vid_obj['path'] = rel_path # We utilize rel_path, frontend prepends /api/videos/
+                else:
+                    vid_obj = {
+                        'id': rel_path,
+                        'name': f,
+                        'path': rel_path
+                    }
+                    existing_videos[rel_path] = vid_obj
+                
+                found_video_objs.append(vid_obj)
+
+    # 2. Update Metadata
+    
+    # Add new classes
+    for c_name in found_class_names:
+        if c_name not in existing_classes:
+            existing_classes[c_name] = {
+                'id': c_name,
+                'name': c_name,
+                'subclips': []
+            }
+            
+    # Update sourceVideos list to match what was found on disk
+    meta['sourceVideos'] = found_video_objs
+    meta['classes'] = list(existing_classes.values())
+    
+    # Save metadata
+    try:
+        with open(metadata_path, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, indent=2)
+    except Exception as e:
+        print(f"Error saving metadata: {e}")
+
+    # 3. Build Response (Grouped by Class) for Frontend
+    response_groups = []
+    
+    # Group found videos by class
+    videos_by_class = {}
+    for v in found_video_objs:
+        parts = v['id'].split('/')
+        c_id = parts[0] if len(parts) > 1 else 'Unsorted'
+        if c_id not in videos_by_class: videos_by_class[c_id] = []
+        videos_by_class[c_id].append(v)
+        
+    for c in meta['classes']:
+        c_id = c['id']
+        c_videos = videos_by_class.get(c_id, [])
+        response_groups.append({
+            'id': c_id,
+            'name': c['name'],
+            'count': len(c_videos),
+            'videos': c_videos
+        })
+        
+    return response_groups
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
@@ -207,4 +332,6 @@ if __name__ == "__main__":
             data = json.load(f)
         sync_dataset(data, 'dataset')
     else:
-        print("Usage: python dataset_manager.py <metadata_json_file>")
+        # Test scan
+        print(json.dumps(scan_dataset('dataset'), indent=2))
+

@@ -1,6 +1,121 @@
 {
+  "metadata": {
+    "generatedAt": "2025-12-10T08:23:33.921Z",
+    "version": "1.0",
+    "description": "Gesture Recognition Dataset with Subclips"
+  },
   "classes": [
-    "nul"
+    {
+      "id": "Lunge",
+      "name": "Lunge",
+      "subclips": []
+    },
+    {
+      "id": "nul",
+      "name": "nul",
+      "subclips": []
+    },
+    {
+      "id": "Unsorted",
+      "name": "Unsorted",
+      "subclips": [
+        {
+          "id": "subclip-1765353419208-vmdgjlmjb",
+          "parentVideoId": "Unsorted/Guillaume ile 6 \ud83d\udc4e\ud83d\udc4e Machine prise 2.mp4",
+          "name": "Guillaume ile 6 \ud83d\udc4e\ud83d\udc4e Machine prise 2.mp4 (Clip)",
+          "startTime": 29.3870286576169,
+          "endTime": 34.387028657616895,
+          "crop": {
+            "x": 0.26395173453996984,
+            "y": 0.09384950561421149,
+            "width": 0.30316742081447967,
+            "height": 0.5227082285905815
+          },
+          "color": "hsl(72, 70%, 60%)"
+        }
+      ]
+    },
+    {
+      "id": "machine",
+      "name": "machine",
+      "subclips": []
+    }
   ],
-  "subclips": []
+  "sourceVideos": [
+    {
+      "id": "Unsorted/Guillaume ile 6 \ud83d\udc4e\ud83d\udc4e Machine prise 1.mp4",
+      "name": "Guillaume ile 6 \ud83d\udc4e\ud83d\udc4e Machine prise 1.mp4",
+      "path": "Unsorted/Guillaume ile 6 \ud83d\udc4e\ud83d\udc4e Machine prise 1.mp4"
+    },
+    {
+      "id": "Unsorted/Guillaume ile 6 \ud83d\udc4e\ud83d\udc4e Machine prise 2.mp4",
+      "name": "Guillaume ile 6 \ud83d\udc4e\ud83d\udc4e Machine prise 2.mp4",
+      "path": "Unsorted/Guillaume ile 6 \ud83d\udc4e\ud83d\udc4e Machine prise 2.mp4"
+    },
+    {
+      "id": "Unsorted/Guillaume ile 6 \ud83d\udc4e\ud83d\udc4e Machine prise 3.mp4",
+      "name": "Guillaume ile 6 \ud83d\udc4e\ud83d\udc4e Machine prise 3.mp4",
+      "path": "Unsorted/Guillaume ile 6 \ud83d\udc4e\ud83d\udc4e Machine prise 3.mp4"
+    },
+    {
+      "id": "Unsorted/Manon Ile 4 \u261d\ufe0f\u261d\ufe0f, catherine prise 1.mp4",
+      "name": "Manon Ile 4 \u261d\ufe0f\u261d\ufe0f, catherine prise 1.mp4",
+      "path": "Unsorted/Manon Ile 4 \u261d\ufe0f\u261d\ufe0f, catherine prise 1.mp4"
+    },
+    {
+      "id": "Unsorted/Manon Ile 4 \u261d\ufe0f\u261d\ufe0f, catherine prise 2.mp4",
+      "name": "Manon Ile 4 \u261d\ufe0f\u261d\ufe0f, catherine prise 2.mp4",
+      "path": "Unsorted/Manon Ile 4 \u261d\ufe0f\u261d\ufe0f, catherine prise 2.mp4"
+    },
+    {
+      "id": "Unsorted/Manon Ile 4 \u261d\ufe0f\u261d\ufe0f, catherine prise 3.mp4",
+      "name": "Manon Ile 4 \u261d\ufe0f\u261d\ufe0f, catherine prise 3.mp4",
+      "path": "Unsorted/Manon Ile 4 \u261d\ufe0f\u261d\ufe0f, catherine prise 3.mp4"
+    },
+    {
+      "id": "Unsorted/Manon Ile 4 \u261d\ufe0f\u261d\ufe0f, catherine prise 4.mp4",
+      "name": "Manon Ile 4 \u261d\ufe0f\u261d\ufe0f, catherine prise 4.mp4",
+      "path": "Unsorted/Manon Ile 4 \u261d\ufe0f\u261d\ufe0f, catherine prise 4.mp4"
+    },
+    {
+      "id": "Unsorted/Manon Ile 4 \u261d\ufe0f\u261d\ufe0f, catherine prise 5.mp4",
+      "name": "Manon Ile 4 \u261d\ufe0f\u261d\ufe0f, catherine prise 5.mp4",
+      "path": "Unsorted/Manon Ile 4 \u261d\ufe0f\u261d\ufe0f, catherine prise 5.mp4"
+    },
+    {
+      "id": "Unsorted/Sylvain ile 7 \ud83d\udc4d\ud83d\udc4d , Machine prise 1.mp4",
+      "name": "Sylvain ile 7 \ud83d\udc4d\ud83d\udc4d , Machine prise 1.mp4",
+      "path": "Unsorted/Sylvain ile 7 \ud83d\udc4d\ud83d\udc4d , Machine prise 1.mp4"
+    },
+    {
+      "id": "Unsorted/Sylvain ile 7 \ud83d\udc4d\ud83d\udc4d , Machine prise 2.mp4",
+      "name": "Sylvain ile 7 \ud83d\udc4d\ud83d\udc4d , Machine prise 2.mp4",
+      "path": "Unsorted/Sylvain ile 7 \ud83d\udc4d\ud83d\udc4d , Machine prise 2.mp4"
+    },
+    {
+      "id": "Unsorted/Sylvain ile 7 \ud83d\udc4d\ud83d\udc4d , Machine prise 3.mp4",
+      "name": "Sylvain ile 7 \ud83d\udc4d\ud83d\udc4d , Machine prise 3.mp4",
+      "path": "Unsorted/Sylvain ile 7 \ud83d\udc4d\ud83d\udc4d , Machine prise 3.mp4"
+    },
+    {
+      "id": "Unsorted/Sylvain ile 7 \ud83d\udc4d\ud83d\udc4d , Machine prise 4.mp4",
+      "name": "Sylvain ile 7 \ud83d\udc4d\ud83d\udc4d , Machine prise 4.mp4",
+      "path": "Unsorted/Sylvain ile 7 \ud83d\udc4d\ud83d\udc4d , Machine prise 4.mp4"
+    },
+    {
+      "id": "Unsorted/Tristan ile 1 \ud83e\udd0f\ud83e\udd0f, machine Prise 1.mp4",
+      "name": "Tristan ile 1 \ud83e\udd0f\ud83e\udd0f, machine Prise 1.mp4",
+      "path": "Unsorted/Tristan ile 1 \ud83e\udd0f\ud83e\udd0f, machine Prise 1.mp4"
+    },
+    {
+      "id": "Unsorted/Tristan ile 1 \ud83e\udd0f\ud83e\udd0f, machine Prise 2.mp4",
+      "name": "Tristan ile 1 \ud83e\udd0f\ud83e\udd0f, machine Prise 2.mp4",
+      "path": "Unsorted/Tristan ile 1 \ud83e\udd0f\ud83e\udd0f, machine Prise 2.mp4"
+    },
+    {
+      "id": "Unsorted/Tristan ile 1 \ud83e\udd0f\ud83e\udd0f, machine Prise 3.mp4",
+      "name": "Tristan ile 1 \ud83e\udd0f\ud83e\udd0f, machine Prise 3.mp4",
+      "path": "Unsorted/Tristan ile 1 \ud83e\udd0f\ud83e\udd0f, machine Prise 3.mp4"
+    }
+  ]
 }
