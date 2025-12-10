@@ -372,6 +372,12 @@ def scan_dataset(dataset_root):
             found_class_names.add(top_class)
             
         for f in files:
+            # Skip hidden files
+            if f.startswith('.'): continue
+            
+            # Skip generated subclips (they should not appear in sourceVideos)
+            if f.startswith('subclip-'): continue
+
             if f.lower().endswith(('.mp4', '.mov', '.webm', '.mkv', '.avi')):
                 full_path = os.path.join(root, f)
                 # rel_path is the ID, e.g. "Unsorted/video.mp4"
@@ -435,6 +441,25 @@ def scan_dataset(dataset_root):
     for c in meta['classes']:
         c_id = c['id']
         c_videos = videos_by_class.get(c_id, [])
+        
+        # Merge subclips from metadata into the response
+        if 'subclips' in c:
+            for sc in c['subclips']:
+                # Construct video object for frontend
+                # Point 'path' to parentVideoId so frontend constructs correct stream URL
+                subclip_obj = {
+                    'id': sc['id'],
+                    'name': sc['name'],
+                    'path': sc['parentVideoId'],
+                    'parentVideoId': sc['parentVideoId'],
+                    'startTime': sc.get('startTime'),
+                    'endTime': sc.get('endTime'),
+                    'crop': sc.get('crop'),
+                    'color': sc.get('color'),
+                    'thumbnailUrl': sc.get('thumbnailUrl')
+                }
+                c_videos.append(subclip_obj)
+
         response_groups.append({
             'id': c_id,
             'name': c['name'],

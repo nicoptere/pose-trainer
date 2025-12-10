@@ -71,12 +71,30 @@ export const useStore = create<AppState>()(
             data.forEach((group: any) => {
               loadedClasses.push({ id: group.id, name: group.name, count: group.count });
               group.videos.forEach((vid: any) => {
-                loadedVideos.push({
-                  id: vid.id,
-                  name: vid.name,
-                  url: `${API_URL}/api/videos/${vid.path}`,
-                  classId: group.id,
-                });
+                // Check if this is a subclip (has parentVideoId) or a regular video
+                if (vid.parentVideoId) {
+                  loadedVideos.push({
+                    id: vid.id,
+                    name: vid.name,
+                    // For subclips, path points to parent video relative path
+                    url: `${API_URL}/api/videos/${vid.path}`,
+                    classId: group.id,
+                    parentVideoId: vid.parentVideoId,
+                    startTime: vid.startTime,
+                    endTime: vid.endTime,
+                    thumbnailUrl: vid.thumbnailUrl,
+                    color: vid.color,
+                    crop: vid.crop,
+                    previewDirty: false // Assume clean on load
+                  });
+                } else {
+                  loadedVideos.push({
+                    id: vid.id,
+                    name: vid.name,
+                    url: `${API_URL}/api/videos/${vid.path}`,
+                    classId: group.id,
+                  });
+                }
               });
             });
           }
