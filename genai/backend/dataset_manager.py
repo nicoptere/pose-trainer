@@ -2,13 +2,16 @@ import os
 import json
 import shutil
 import re
-from moviepy.video.io.VideoFileClip import VideoFileClip
+import traceback
+from moviepy.editor import VideoFileClip, vfx
+from moviepy.video.io.ffmpeg_writer import ffmpeg_write_video
 
 def sanitize_filename(name):
     """Sanitize string to be safe for directory/filenames."""
     return re.sub(r'[<>:"/\\|?*]', '_', name).strip()
 
 def sync_dataset(metadata, dataset_root):
+
     """
     Synchronizes the 'dataset' folder structure with the provided metadata.
     
@@ -25,84 +28,134 @@ def sync_dataset(metadata, dataset_root):
     """
     
     classes_map = {c['id']: c['name'] for c in metadata.get('classes', [])}
+
+    # 1. Recover Source Videos from Disk (Preserve Inputs)
+    # The frontend might send a partial list of sourceVideos. We MUST NOT delete existing source videos on disk.
+    # We treat the Disk as the Authority for what Source Videos exist.
+    # We treat the Frontend as the Authority for Classes and Subclips.
     
-    videos = metadata.get('videos', [])
+    current_disk_state = scan_dataset(dataset_root)
+    # current_disk_state is a list of groups. We need to extract source videos.
+    disk_source_videos = []
+    for group in current_disk_state:
+        for v in group['videos']:
+            # We assume everything on disk is a potential source video if it's not a known subclip?
+            # Actually, scan_dataset returns everything.
+            # We want to ensure 'videos' list (used for desired_files) includes ALL these.
+            
+            # Use the path from the scan result
+            # v['path'] is e.g. "Unsorted/video.mp4"
+            disk_source_videos.append({
+                'id': v['id'],
+                'name': v['name'],
+                'path': v['path']
+                # classId is group['id']
+            })
+
+    # Prepare final 'videos' list for processing
+    # We start with the disk source videos (so they are automatically "desired")
+    videos = list(disk_source_videos)
     
-    # 1. Identify Desired Video Clips
-    # Map: desired_file_path -> { 'source': source_path, 'start': s, 'end': e }
+    # Now merge/add subclips from Frontend Metadata
+    # And potentially overwrite source video metadata if frontend has newer info? 
+    # (For now, just appending subclips is key).
+    
+    if 'classes' in metadata:
+        for c in metadata['classes']:
+            if 'subclips' in c:
+                for sc in c['subclips']:
+                    sc['classId'] = c['id']
+                    videos.append(sc)
+
+    # Sync Metadata.json with reality + subclips
+    # We want to save a metadata.json that has:
+    # classes: from Frontend
+    # sourceVideos: from Disk (so we don't lose them)
+    # This ensures consistency.
+    
+    metadata_to_save = {
+        'metadata': metadata.get('metadata', {}),
+        'classes': metadata.get('classes', []),
+        'sourceVideos': disk_source_videos
+    }
+
+    try:
+        metadata_path = os.path.join(dataset_root, 'metadata.json')
+        with open(metadata_path, 'w', encoding='utf-8') as f:
+            json.dump(metadata_to_save, f, indent=2)
+        print(f"Saved updated metadata.json")
+    except Exception as e:
+        print(f"Error saving metadata.json: {e}")
+
+    # 2. Identify Desired Video Clips
     desired_files = {}
-    
-    stats = {'created': 0, 'deleted': 0, 'errors': 0, 'skipped': 0}
+    stats = {'created': 0, 'deleted': 0, 'errors': 0, 'skipped': 0, 'error_messages': []}
     
     print(f"Syncing dataset to {dataset_root}...")
     
     if not os.path.exists(dataset_root):
         os.makedirs(dataset_root)
         
-    # Group videos by class
     for video in videos:
+        # Determine Target Path
         class_id = video.get('classId')
         
-        # Skip unsorted or unassigned
-        if not class_id or class_id == 'Unsorted':
-            continue
-            
-        class_name = classes_map.get(class_id)
-        if not class_name:
-            print(f"Warning: Class ID {class_id} not found in classes list.")
-            continue
-            
-        # We only care about subclips which have a parentVideoId
+        # Determine Source Path (for copying/subclipping)
+        source_url = video.get('url') or video.get('path')
         parent_id = video.get('parentVideoId')
         
-        # Find the parent video to get the actual URL/Path
-        # Note: video['url'] in subclip might be empty or same as parent. 
-        # Usually subclip metadata might not have 'url', or 'url' points to generated subclip?
-        # In this system, 'url' seems to be the source URL for the player.
-        
-        # If it's a subclip, we look up the parent for the source file
-        source_url = video.get('url')
         if parent_id:
-            parent_video = next((v for v in videos if v['id'] == parent_id), None)
-            if parent_video and parent_video.get('url'):
-                source_url = parent_video.get('url')
+             # It's a subclip, find parent in our list
+             parent = next((v for v in videos if v.get('id') == parent_id), None)
+             if parent:
+                 source_url = parent.get('url') or parent.get('path')
         
-        if not source_url:
-            print(f"Warning: No source URL for video {video['id']}")
-            continue
-            
-        # Check start/end time
+        # Subclip Detection
         start_time = video.get('startTime')
         end_time = video.get('endTime')
-        
-        # If it's a full video assigned to a class (no start/end), deciding policy:
-        # User said "classes and the subclip". If it's a full video, maybe copy it?
-        # But 'MediaBunny' implies subclip focus.
-        # Logic: If start/end exist, cut. If not, copy full? 
-        # Let's assume full copy if no times, or 0 to Duration.
-        
         is_subclip = (start_time is not None and end_time is not None)
         
+        # Class Name Resolution
+        if not class_id:
+            # Try to deduce from path if source video
+            if not is_subclip and video.get('path'):
+                parts = video['path'].split('/')
+                class_id = parts[0] if len(parts) > 1 else 'Unsorted'
+            else:
+                class_id = 'Unsorted'
+
+        class_name = classes_map.get(class_id, class_id)
         safe_class_name = sanitize_filename(class_name)
-        file_ext = os.path.splitext(source_url)[1] or '.mp4'
-        if '?' in file_ext: file_ext = file_ext.split('?')[0] # Remove query params
         
-        # Filename: subclipID.ext
-        target_filename = f"{video['id']}{file_ext}"
-        target_dir = os.path.join(dataset_root, safe_class_name)
-        target_path = os.path.join(target_dir, target_filename)
-        
+        # Target Filename
+        if is_subclip:
+            ext = '.mp4'
+            if source_url:
+                _, ext = os.path.splitext(source_url)
+                if '?' in ext: ext = ext.split('?')[0]
+                if not ext: ext = '.mp4'
+            
+            target_filename = f"{video['id']}{ext}"
+            target_path = os.path.join(dataset_root, safe_class_name, target_filename)
+        else:
+            # Source Video - preserve path
+            if video.get('path'):
+                target_path = os.path.join(dataset_root, video['path'])
+            else:
+                # Should not happen for disk_source_videos
+                target_path = os.path.join(dataset_root, safe_class_name, f"{video['id']}.mp4")
+
         desired_files[target_path] = {
             'source': source_url,
-            'start': start_time if is_subclip else 0,
-            'end': end_time if is_subclip else None,
+            'start': start_time,
+            'end': end_time,
             'is_subclip': is_subclip,
-            'id': video['id']
+            'id': video.get('id'),
+            'crop': video.get('crop')
         }
 
-    # 2. Cleanup Phase: Remove files/folders not in desired list
-    
-    # List all class directories
+    # 3. Cleanup Phase
+    # (Delete files not in desired_files)
     try:
         existing_dirs = [d for d in os.listdir(dataset_root) if os.path.isdir(os.path.join(dataset_root, d))]
     except FileNotFoundError:
@@ -110,97 +163,163 @@ def sync_dataset(metadata, dataset_root):
 
     for d in existing_dirs:
         dir_path = os.path.join(dataset_root, d)
-        
-        # If directory is not mapped to any current class, delete it?
-        # Be careful: class name change? 
-        # Logic: If directory contains files that are NOT in desired_files, delete files.
-        # If directory empty, delete directory.
-        
-        # Better: Walk all files.
         for root, dirs, files in os.walk(dir_path):
             for file in files:
                 full_path = os.path.join(root, file)
-                if full_path not in desired_files:
+                # Normalization for comparison
+                full_path_norm = os.path.normpath(full_path)
+                
+                # Check if desired. We need to check normalized paths against normalized desired keys.
+                # Optimization: Normalize desired keys once?
+                # For now, simplistic check.
+                is_desired = False
+                for dp in desired_files:
+                    if os.path.normpath(dp) == full_path_norm:
+                        is_desired = True
+                        break
+                
+                if not is_desired:
+                    # Don't delete metadata.json!
+                    if file == 'metadata.json': continue
+                    
                     print(f"Deleting orphaned file: {full_path}")
                     try:
                         os.remove(full_path)
                         stats['deleted'] += 1
                     except OSError as e:
-                        print(f"Error deleting {full_path}: {e}")
+                        msg = f"Error deleting {full_path}: {e}"
+                        print(msg)
+                        stats['error_messages'].append(msg)
         
-        # If dir is empty, remove it
-        if not os.listdir(dir_path):
-             # Only remove if it's not a desired class dir (though if empty and existing, maybe keep?)
-             # But if class was renamed, we want to remove old dir.
-             # Check if this dir name matches any desired class.
-             # This is tricky if case differs.
-             # Simple approach: rmdir if empty.
-             try:
-                 os.rmdir(dir_path)
-             except:
-                 pass
+    # Remove empty dirs (except Unsorted, maybe?)
+    if not os.listdir(dir_path):
+            try:
+                os.rmdir(dir_path)
+            except: pass
 
-    # 3. Creation Phase
+    # 4. Creation Phase
     for target_path, info in desired_files.items():
-        target_dir = os.path.dirname(target_path)
-        if not os.path.exists(target_dir):
-            os.makedirs(target_dir)
-            
         if os.path.exists(target_path):
-            # File exists. Ideally check if parameters changed.
-            # For now, skip if exists.
-            # stats['skipped'] += 1
-            # UNLESS: We want to support updates? 
-            # If user changed start/end time, filename (ID) is same.
-            # We should probably check modification time or store metadata sidecar.
-            # For now, simplistic: Start/End time is usually baked into the file? No.
-            # Re-creating every time is slow.
-            # Compromise: Skip if exists. User must delete to regenerate?
-            # Or: add time to filename? -> `id_start_end.mp4`.
-            # If I stick to ID only, I won't detect time changes.
-            # But the requirement says "structure should be updated".
-            # I will trust the user or the ID strategy.
-            # Let's check file size?
             stats['skipped'] += 1
             continue
             
-        print(f"Creating {target_path} from {info['source']} ({info['start']}-{info['end']})")
+        try:
+            print(f"Creating {target_path} from {info['source']} ...".encode('utf-8', errors='replace').decode('utf-8'))
+        except:
+             print(f"Creating {target_path} ...")
         
         try:
             source = info['source']
-            # Convert URI to path if possible
-            if source.startswith('file:///'):
-                source = source.replace('file:///', '') # Windows/Linux
+            if not source:
+                msg = f"Skipping {target_path}: No source defined"
+                print(msg)
+                stats['errors'] += 1
+                stats['error_messages'].append(msg)
+                continue
+
+            # Path Resolution Fix
+            # Remove /api/videos/ prefix if present
+            if source.startswith('/api/videos/'): source = source.replace('/api/videos/', '')
+            if source.startswith(os.getcwd()): source = os.path.relpath(source, os.getcwd()) # Simplify
             
-            # Handle /api/videos prefix
-            if source.startswith('/api/videos/'):
-                source = source.replace('/api/videos/', '')
+            # Check locations
+            possible_paths = [
+                source,
+                os.path.join(dataset_root, source), # Check inside dataset
+                os.path.join(os.getcwd(), source)
+            ]
             
-            # Use MoviePy
-            if not os.path.exists(source):
-                # Try relative to CWD?
-                if os.path.exists(os.path.join(os.getcwd(), source)):
-                    source = os.path.join(os.getcwd(), source)
-                else:
-                    print(f"Error: Source file not found: {source}")
-                    stats['errors'] += 1
-                    continue
+            found_source = None
+            for p in possible_paths:
+                if os.path.exists(p):
+                    found_source = p
+                    break
             
+            if not found_source:
+                 msg = f"Error: Source file not found: {source}"
+                 print(msg)
+                 stats['errors'] += 1
+                 stats['error_messages'].append(msg)
+                 continue
+                 
+            # Create Directory
+            target_dir = os.path.dirname(target_path)
+            if not os.path.exists(target_dir):
+                os.makedirs(target_dir)
+
             if info['is_subclip']:
-                with VideoFileClip(source) as video:
-                    # Clip
-                    new_clip = video.subclip(info['start'], info['end'])
-                    # Write
-                    new_clip.write_videofile(target_path, codec="libx264", audio_codec="aac", logger=None)
+                print(f"DEBUG: Processing subclip. Source: {found_source}, Start: {info['start']}, End: {info['end']}")
+                
+                # Ensure times are floats
+                start_t = float(info['start'])
+                end_t = float(info['end'])
+                
+                # Create a temporary safe filename for processing to avoid issues with special chars
+                temp_safe_source = f"temp_source_{info.get('id', 'video')}.mp4"
+                temp_safe_source = sanitize_filename(temp_safe_source)
+                shutil.copy2(found_source, temp_safe_source)
+
+                try:
+                    with VideoFileClip(temp_safe_source) as video:
+                        new_clip = video.subclip(start_t, end_t)
+                        
+                        # Apply Crop if present
+                        if info.get('crop'):
+                            c = info['crop']
+                            w, h = new_clip.size
+                            x1 = int(c['x'] * w)
+                            y1 = int(c['y'] * h)
+                            width = int(c['width'] * w)
+                            height = int(c['height'] * h)
+                            
+                            new_clip = new_clip.fx(vfx.crop, x1=x1, y1=y1, width=width, height=height)
+
+                        # Explicitly handle FPS
+                        my_fps = new_clip.fps 
+                        if not my_fps and hasattr(video, 'fps'):
+                             my_fps = video.fps
+                        
+                        if not my_fps:
+                            print("Warning: Could not detect FPS from source. Defaulting to 30 fps.")
+                            my_fps = 30.0
+                        
+                        my_fps = float(my_fps)
+                        print(f"DEBUG: Writing video with FPS={my_fps}")
+
+                        # Set FPS on the clip object itself
+                        new_clip.fps = my_fps
+                        
+                        # Explicitly set duration to ensure subclip bounds are respected
+                        # This fixes "duration leaking" from parent clip when bypassing decorators
+                        new_clip = new_clip.set_duration(end_t - start_t)
+                        new_clip.start = 0
+                        new_clip.end = end_t - start_t
+                        
+                        # Ensure metadata application (Duration)
+                        expected_duration = end_t - start_t
+                        print(f"DEBUG: Writing subclip. Expected Duration: {expected_duration:.4f}s, Clip Duration: {new_clip.duration:.4f}s")
+
+                        # Write video without audio as requested
+                        # Bypass write_videofile decorators by using internal writer
+                        ffmpeg_write_video(new_clip, target_path, new_clip.fps, codec="libx264", audiofile=None)
+                finally:
+                    if os.path.exists(temp_safe_source):
+                        try:
+                            os.remove(temp_safe_source)
+                        except: pass
             else:
-                # Copy full file
-                shutil.copy2(source, target_path)
+                # Copy full file (Source Video) - only if we are restoring/moving
+                if found_source != target_path:
+                    shutil.copy2(found_source, target_path)
                 
             stats['created'] += 1
             
         except Exception as e:
-            print(f"Failed to create {target_path}: {e}")
+            traceback_str = traceback.format_exc()
+            msg = f"Failed to create {target_path}: {str(e)}\n{traceback_str}"
+            print(msg)
             stats['errors'] += 1
+            stats['error_messages'].append(msg)
 
     return stats
 

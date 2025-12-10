@@ -50,6 +50,9 @@ interface AppState {
   moveVideo: (videoId: string, targetClassId: string) => void;
   updateVideo: (id: string, updates: Partial<VideoClip>) => void;
   deleteClass: (id: string) => Promise<void>;
+
+  // Sync
+  syncDataset: () => Promise<void>;
 }
 
 export const useStore = create<AppState>()(
@@ -267,6 +270,83 @@ export const useStore = create<AppState>()(
           }
         } catch (err) {
           console.error('Failed to delete class:', err);
+        }
+      },
+
+
+
+      syncDataset: async () => {
+        const state = get();
+
+        // Reconstruct Metadata Structure for Backend
+        // 1. Classes with Subclips
+        const classesPayload = state.classes.map(c => {
+          // Find subclips assigned to this class
+          const subclips = state.videos.filter(v =>
+            v.classId === c.id && v.parentVideoId // Must be a subclip
+          ).map(sc => ({
+            id: sc.id,
+            parentVideoId: sc.parentVideoId,
+            name: sc.name,
+            startTime: sc.startTime,
+            endTime: sc.endTime,
+            crop: sc.crop,
+            color: sc.color,
+            thumbnailUrl: sc.thumbnailUrl
+          }));
+
+          return {
+            id: c.id,
+            name: c.name,
+            subclips: subclips
+          };
+        });
+
+        // 2. Source Videos (Flat List of non-subclips)
+        // Actually, we should include ALL source videos known, even if they are in 'Unsorted'.
+        // Subclips don't go into 'sourceVideos'.
+        const sourceVideosPayload = state.videos.filter(v => !v.parentVideoId).map(v => {
+          // Strip URL prefix if present to ensure relative paths in metadata
+          let path = v.url;
+          if (path.startsWith(API_URL)) path = path.replace(API_URL, '');
+          if (path.startsWith('/api/videos/')) path = path.replace('/api/videos/', '');
+
+          return {
+            id: v.id,
+            name: v.name,
+            path: path
+          };
+        });
+
+        const payload = {
+          metadata: {
+            generatedAt: new Date().toISOString(),
+            version: "1.0",
+            description: "Gesture Recognition Dataset with Subclips (Synced from Frontend)"
+          },
+          classes: classesPayload,
+          sourceVideos: sourceVideosPayload
+        };
+
+        try {
+          const res = await fetch(`${API_URL}/dataset/sync`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const result = await res.json();
+          if (!res.ok) throw new Error(result.error || 'Sync failed');
+
+          // Optionally reload to confirm Sync or just alert success?
+          let msg = `Sync Complete!\nCreated: ${result.stats?.created}\nDeleted: ${result.stats?.deleted}\nSkipped: ${result.stats?.skipped}\nErrors: ${result.stats?.errors}`;
+          if (result.stats?.error_messages && result.stats.error_messages.length > 0) {
+            msg += `\n\nError Details:\n${result.stats.error_messages.join('\n')}`;
+          }
+          alert(msg);
+
+        } catch (err) {
+          console.error("Sync failed", err);
+          alert("Sync Failed: " + err);
         }
       },
 

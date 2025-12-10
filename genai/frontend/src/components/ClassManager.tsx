@@ -229,6 +229,15 @@ export default function ClassManager() {
                         >
                             Add
                         </Button>
+                        <Button
+                            variant="contained"
+                            color="secondary"
+                            onClick={async () => {
+                                await useStore.getState().syncDataset();
+                            }}
+                        >
+                            Commit Changes
+                        </Button>
                     </Box>
 
                     <Box sx={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
