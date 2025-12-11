@@ -112,6 +112,7 @@ export default function ClassManager() {
                                         setIsEditing(false);
                                         setEditingVideoId(null);
                                         setClickedSubclipId(null);
+                                        setPreviewUrl(null);
                                     }}
                                 >
                                     <Close sx={{ color: 'white' }} />
@@ -126,6 +127,7 @@ export default function ClassManager() {
                                             setIsEditing(false);
                                             setEditingVideoId(null);
                                             setClickedSubclipId(null);
+                                            setPreviewUrl(null);
                                         }}
                                         activeSubclipId={clickedSubclipId}
                                     />

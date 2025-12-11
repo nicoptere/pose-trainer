@@ -52,7 +52,8 @@ export function DroppableClass({ id, title, children, onDelete, columns }: Props
                 gap: 1
             } : {
                 display: 'flex',
-                flexWrap: 'wrap'
+                flexWrap: 'wrap',
+                gap: 1
             }}>
                 {children}
             </Box>

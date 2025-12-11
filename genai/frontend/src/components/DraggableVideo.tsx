@@ -35,7 +35,7 @@ export function DraggableVideo({ id, url, thumbnailUrl, name, width = 80, onClic
     return (
         <div
             ref={setNodeRef}
-            style={{ ...style, width: '100%', minWidth: 0 }}
+            style={{ ...style, width: width, minWidth: 0 }}
             {...listeners}
             {...attributes}
             onClick={onClick}
@@ -44,12 +44,12 @@ export function DraggableVideo({ id, url, thumbnailUrl, name, width = 80, onClic
                 onMouseEnter={(e) => onHover?.(e, id)}
                 onMouseLeave={onLeave}
                 sx={{
-                    width: width,
-                    // Remove margin as Grid gap handles spacing
-                    // m: 0.5, 
+                    width: '100%', // Card fills wrapper
+                    // m: 0.5, // Handled by parent gap
                     boxShadow: 1,
                     position: 'relative',
-                    border: color ? `2px solid ${color}` : 'none'
+                    border: color ? `2px solid ${color}` : 'none',
+                    userSelect: 'none' // Prevent selection
                 }}>
                 {thumbnailUrl ? (
                     <CardMedia
