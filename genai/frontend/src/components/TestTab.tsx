@@ -506,23 +506,41 @@ export default function TestTab() {
                     <Card>
                         <CardContent>
                             <Typography variant="h6" gutterBottom>Classes</Typography>
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                                {labels.map((l, i) => (
-                                    <Paper
-                                        key={l}
-                                        elevation={0}
-                                        sx={{
-                                            px: 1,
-                                            py: 0.5,
-                                            bgcolor: prediction?.label === l ? 'primary.light' : 'action.hover',
-                                            color: prediction?.label === l ? 'white' : 'inherit',
-                                            border: '1px solid',
-                                            borderColor: 'divider'
-                                        }}
-                                    >
-                                        <Typography variant="caption">{l}</Typography>
-                                    </Paper>
-                                ))}
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                                {labels.map((l, i) => {
+                                    const anim = animations ? animations[String(i)] : null;
+                                    const isSelected = prediction?.label === l;
+
+                                    return (
+                                        <Paper
+                                            key={l}
+                                            elevation={0}
+                                            sx={{
+                                                p: 1,
+                                                bgcolor: isSelected ? 'primary.light' : 'action.hover',
+                                                color: isSelected ? 'white' : 'inherit',
+                                                border: '1px solid',
+                                                borderColor: 'divider',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'center',
+                                                minWidth: 80
+                                            }}
+                                        >
+                                            {anim && (
+                                                <Box sx={{ mb: 1, bgcolor: 'black', borderRadius: 1, overflow: 'hidden' }}>
+                                                    <GesturePreview
+                                                        animation={anim}
+                                                        width={80}
+                                                        height={80}
+                                                        color={isSelected ? '#ffffff' : '#4ADE80'}
+                                                    />
+                                                </Box>
+                                            )}
+                                            <Typography variant="caption" align="center">{l}</Typography>
+                                        </Paper>
+                                    );
+                                })}
                             </Box>
                         </CardContent>
                     </Card>

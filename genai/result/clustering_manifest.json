@@ -2,7 +2,7 @@
   "total_gestures": 5,
   "num_clusters": 3,
   "metric": "manual",
-  "analysis_fps": 12,
+  "analysis_fps": 30,
   "clustering_method": "manual_folders",
   "clusters": {
     "0": {
@@ -12,17 +12,17 @@
           "source_video": "C:\\ML\\perso\\pose-trainer\\genai\\dataset\\cest_nul\\subclip-1765401983674-y1bhmlq2p.mp4",
           "video_name": "subclip-1765401983674-y1bhmlq2p.mp4",
           "start_frame": 0,
-          "end_frame": 60,
+          "end_frame": 150,
           "duration_seconds": 5.0,
-          "duration_frames": 60
+          "duration_frames": 150
         },
         {
           "source_video": "C:\\ML\\perso\\pose-trainer\\genai\\dataset\\cest_nul\\subclip-1765445143295-e8rtpe4g8.mp4",
           "video_name": "subclip-1765445143295-e8rtpe4g8.mp4",
           "start_frame": 0,
-          "end_frame": 100,
+          "end_frame": 250,
           "duration_seconds": 8.333333333333334,
-          "duration_frames": 100
+          "duration_frames": 250
         }
       ],
       "label": "cest_nul"
@@ -34,9 +34,9 @@
           "source_video": "C:\\ML\\perso\\pose-trainer\\genai\\dataset\\loop\\subclip-1765402487045-szai68ikr.mp4",
           "video_name": "subclip-1765402487045-szai68ikr.mp4",
           "start_frame": 0,
-          "end_frame": 121,
-          "duration_seconds": 10.083333333333334,
-          "duration_frames": 121
+          "end_frame": 301,
+          "duration_seconds": 10.033333333333333,
+          "duration_frames": 301
         }
       ],
       "label": "loop"
@@ -48,17 +48,17 @@
           "source_video": "C:\\ML\\perso\\pose-trainer\\genai\\dataset\\machine\\subclip-1765402039535-3kwklznbv.mp4",
           "video_name": "subclip-1765402039535-3kwklznbv.mp4",
           "start_frame": 0,
-          "end_frame": 90,
+          "end_frame": 225,
           "duration_seconds": 7.5,
-          "duration_frames": 90
+          "duration_frames": 225
         },
         {
           "source_video": "C:\\ML\\perso\\pose-trainer\\genai\\dataset\\machine\\subclip-1765402388115-1g1hfxi6e.mp4",
           "video_name": "subclip-1765402388115-1g1hfxi6e.mp4",
           "start_frame": 0,
-          "end_frame": 83,
-          "duration_seconds": 6.916666666666667,
-          "duration_frames": 83
+          "end_frame": 207,
+          "duration_seconds": 6.9,
+          "duration_frames": 207
         }
       ],
       "label": "machine"
