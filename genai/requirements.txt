@@ -7,3 +7,13 @@ requests==2.31.0
 ffmpeg-python==0.2.0
 Pillow
 numpy
+opencv-python
+mediapipe
+torch
+scikit-learn
+tqdm
+pandas
+dtaidistance
+matplotlib
+seaborn
+hdbscan

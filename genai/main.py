@@ -248,6 +248,45 @@ def train_mediapipe():
         app.logger.error(f"Training error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/train/classifier', methods=['POST'])
+def train_classifier():
+    try:
+        import subprocess
+        
+        # Paths relative to genai/
+        root_dir = os.path.dirname(os.path.dirname(__file__)) # c:\ML\perso\pose-trainer
+        genai_dir = os.path.dirname(__file__) # c:\ML\perso\pose-trainer\genai
+        backend_script = os.path.join(genai_dir, 'backend', 'classification.py')
+        
+        # Arguments
+        # Manifest is in root output/
+        manifest_path = os.path.join(root_dir, 'output', 'clustering_manifest.json')
+        # Model output to root models/
+        model_output = os.path.join(root_dir, 'models', 'gesture_classifier.onnx')
+        
+        # Ensure models dir exists
+        os.makedirs(os.path.dirname(model_output), exist_ok=True)
+        
+        cmd = [
+            sys.executable, 
+            backend_script,
+            '--manifest', manifest_path,
+            '--output', model_output
+        ]
+        
+        print(f"Running classifier training: {' '.join(cmd)}")
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=genai_dir)
+        
+        if result.returncode == 0:
+            return jsonify({'success': True, 'output': result.stdout}), 200
+        else:
+            return jsonify({'error': 'Training failed', 'details': result.stderr, 'output': result.stdout}), 500
+            
+    except Exception as e:
+        app.logger.error(f"Classifier training error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     # Run locally
     port = int(os.environ.get('PORT', 8080))

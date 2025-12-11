@@ -126,12 +126,35 @@ export default function TrainingTab() {
                 throw new Error(data.error || "Training failed");
             }
 
-            setSuccessMsg("Training completed successfully!");
+            setSuccessMsg("Mediapipe processing completed successfully!");
             setTrainOutput(data.output || "No output returned.");
         } catch (err) {
             setError(err instanceof Error ? err.message : String(err));
-            // Try to recover output if available in error structure? 
-            // Simplified here.
+        } finally {
+            setTraining(false);
+        }
+    };
+
+    const handleTrainClassifier = async () => {
+        try {
+            setTraining(true);
+            setTrainOutput(null);
+            setError(null);
+
+            const res = await fetch(`${API_URL}/api/train/classifier`, {
+                method: 'POST'
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || "Classifier training failed");
+            }
+
+            setSuccessMsg("Classifier training completed successfully!");
+            setTrainOutput(data.output || "No output returned.");
+        } catch (err) {
+            setError(err instanceof Error ? err.message : String(err));
         } finally {
             setTraining(false);
         }
@@ -162,7 +185,7 @@ export default function TrainingTab() {
                 {successMsg && <Alert severity="success" sx={{ mb: 2 }}>{successMsg}</Alert>}
 
                 <Grid container spacing={3}>
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                         <TextField
                             fullWidth
                             label="Analysis FPS"
@@ -173,7 +196,7 @@ export default function TrainingTab() {
                         />
                     </Grid>
 
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                         <TextField
                             fullWidth
                             label="DTW Downsample Factor"
@@ -184,7 +207,7 @@ export default function TrainingTab() {
                         />
                     </Grid>
 
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                         <TextField
                             fullWidth
                             label="Min Gesture Duration (seconds)"
@@ -194,7 +217,7 @@ export default function TrainingTab() {
                         />
                     </Grid>
 
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                         <TextField
                             fullWidth
                             label="Max Gesture Duration (seconds)"
@@ -204,7 +227,7 @@ export default function TrainingTab() {
                         />
                     </Grid>
 
-                    <Grid item xs={12}>
+                    <Grid size={{ xs: 12 }}>
                         <FormControlLabel
                             control={
                                 <Switch
@@ -223,7 +246,7 @@ export default function TrainingTab() {
                         />
                     </Grid>
 
-                    <Grid item xs={12}>
+                    <Grid size={{ xs: 12 }}>
                         <TextField
                             fullWidth
                             label="Number of Clusters (Manual)"
@@ -239,37 +262,65 @@ export default function TrainingTab() {
                     </Grid>
                 </Grid>
 
-                <Box sx={{ mt: 4, display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+                <Box sx={{ mt: 3, display: 'flex', gap: 2, justifyContent: 'flex-end', borderTop: '1px solid #eee', pt: 2 }}>
                     <Button
-                        variant="contained"
+                        variant="outlined"
                         startIcon={<SaveIcon />}
                         onClick={handleSave}
                         disabled={saving}
+                        size="small"
                     >
-                        {saving ? 'Saving...' : 'Save Configuration'}
+                        {saving ? 'Saving...' : 'Save Config'}
                     </Button>
                 </Box>
             </Paper>
 
-            <Paper sx={{ mt: 3, p: 4, borderRadius: 2 }}>
+            <Paper sx={{ mt: 3, p: 3, borderRadius: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" fontWeight="bold">Pipeline Execution</Typography>
+                    <Typography variant="h6" fontWeight="bold">Training Pipeline</Typography>
                 </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                    Run the full pipeline to extract gestures from videos and re-cluster them using the current configuration.
-                </Typography>
 
-                <Button
-                    variant="contained"
-                    color="secondary"
-                    onClick={handleRetrain}
-                    disabled={training}
-                    fullWidth
-                    size="large"
-                >
-                    {training ? <CircularProgress size={24} color="inherit" sx={{ mr: 1 }} /> : null}
-                    {training ? 'Processing...' : 'Retrain Mediapipe & Cluster'}
-                </Button>
+                <Grid container spacing={2}>
+                    <Grid size={{ xs: 12, md: 6 }}>
+                        <Button
+                            variant="contained"
+                            color="warning"
+                            onClick={handleRetrain}
+                            disabled={training}
+                            fullWidth
+                            size="large"
+                            sx={{ height: '100%' }}
+                        >
+                            {training ? <CircularProgress size={24} color="inherit" sx={{ mr: 1 }} /> : null}
+                            <Box sx={{ textAlign: 'left' }}>
+                                <Typography variant="button" display="block">1. Process Dataset</Typography>
+                                <Typography variant="caption" display="block" sx={{ textTransform: 'none', opacity: 0.8 }}>
+                                    Extract poses & Generate Manifest
+                                </Typography>
+                            </Box>
+                        </Button>
+                    </Grid>
+
+                    <Grid size={{ xs: 12, md: 6 }}>
+                        <Button
+                            variant="contained"
+                            color="success"
+                            onClick={handleTrainClassifier}
+                            disabled={training}
+                            fullWidth
+                            size="large"
+                            sx={{ height: '100%' }}
+                        >
+                            {training ? <CircularProgress size={24} color="inherit" sx={{ mr: 1 }} /> : null}
+                            <Box sx={{ textAlign: 'left' }}>
+                                <Typography variant="button" display="block">2. Train Model</Typography>
+                                <Typography variant="caption" display="block" sx={{ textTransform: 'none', opacity: 0.8 }}>
+                                    Train Classifier & Export ONNX
+                                </Typography>
+                            </Box>
+                        </Button>
+                    </Grid>
+                </Grid>
 
                 {trainOutput && (
                     <Box sx={{ mt: 3, bgcolor: '#f5f5f5', p: 2, borderRadius: 1, maxHeight: 300, overflow: 'auto', fontFamily: 'monospace', fontSize: '0.8rem' }}>
