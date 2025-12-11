@@ -56,9 +56,10 @@ export default function Home() {
           Google Gesture Lab
         </Typography>
         <Tabs value={tabIndex} onChange={handleChange} aria-label="lab tabs">
-          <Tab label="Train (Dataset)" />
+          <Tab label="DATASET" />
+          <Tab label="Training" />
           <Tab label="Test (Live Camera)" />
-          <Tab label="Export " />
+          <Tab label="Metadata" />
         </Tabs>
       </Box>
 
@@ -67,9 +68,14 @@ export default function Home() {
           <ClassManager />
         </CustomTabPanel>
         <CustomTabPanel value={tabIndex} index={1}>
-          <TestTab />
+          <Box sx={{ p: 4, textAlign: 'center' }}>
+            <Typography variant="h5" color="text.secondary">Training Interface Coming Soon</Typography>
+          </Box>
         </CustomTabPanel>
         <CustomTabPanel value={tabIndex} index={2}>
+          <TestTab />
+        </CustomTabPanel>
+        <CustomTabPanel value={tabIndex} index={3}>
           <MetadataTab />
         </CustomTabPanel>
       </Box>
