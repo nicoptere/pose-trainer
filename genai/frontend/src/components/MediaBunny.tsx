@@ -21,11 +21,12 @@ function formatTime(s: number) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-function DraggableSubclipThumbnail({ clip, onDelete, onSelect, isEditing, onPlayPause }: {
+function DraggableSubclipThumbnail({ clip, onDelete, onSelect, isEditing, isPlaying, onPlayPause }: {
     clip: VideoClip,
     onDelete: (id: string) => void,
     onSelect: (id: string) => void,
     isEditing: boolean,
+    isPlaying: boolean,
     onPlayPause: (id: string) => void
 }) {
     // Prefix ID to avoid conflict with ClassManager draggables
@@ -126,7 +127,7 @@ function DraggableSubclipThumbnail({ clip, onDelete, onSelect, isEditing, onPlay
                     onPointerDown={(e) => e.stopPropagation()}
                 >
                     {/* We need to know if THIS clip is currently playing/looping to show Pause icon */}
-                    {isEditing ? <Pause sx={{ color: 'white', fontSize: '0.9rem' }} /> : <PlayArrow sx={{ color: 'white', fontSize: '0.9rem' }} />}
+                    {isEditing && isPlaying ? <Pause sx={{ color: 'white', fontSize: '0.9rem' }} /> : <PlayArrow sx={{ color: 'white', fontSize: '0.9rem' }} />}
                 </IconButton>
             </Box>
         </Paper>
@@ -995,6 +996,7 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                                 }
                             }}
                             isEditing={editingClipId === clip.id}
+                            isPlaying={isPlaying}
                         />
                     ))}
                 </Box>
