@@ -584,6 +584,11 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
             setSelection([newStart, newEnd]);
             selectionRef.current = [newStart, newEnd];
 
+            // Update loop region if looping to match new size
+            if (isLooping) {
+                setLoopRegion([newStart, newEnd]);
+            }
+
             if (videoRef.current) {
                 const targetTime = dragMode === 'resize-end' ? newEnd : newStart;
                 if (Math.abs(videoRef.current.currentTime - targetTime) > 0.1) {
@@ -616,11 +621,17 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
             window.removeEventListener('pointermove', handlePointerMove);
             window.removeEventListener('pointerup', handlePointerUp);
         };
-    }, [dragMode, dragStartX, initialSelection, duration]); // commitChanges omitted for stability
+    }, [dragMode, dragStartX, initialSelection, duration, isLooping]); // commitChanges omitted for stability
 
     // Timeline Click Handler
     const handleTimelineClick = (e: React.MouseEvent) => {
         if (isDraggingRef.current) return;
+
+        // Pause playback on interaction
+        if (isPlaying && videoRef.current) {
+            videoRef.current.pause();
+            setIsPlaying(false);
+        }
 
         // Only if clicked directly on the timeline (or bubbled up from markers who didn't stop propagation? Markers DO stop prop)
         const rect = e.currentTarget.getBoundingClientRect();
