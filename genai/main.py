@@ -300,13 +300,59 @@ def train_classifier():
         
         result = subprocess.run(cmd, capture_output=True, text=True, cwd=genai_dir)
         
-        if result.returncode == 0:
-            return jsonify({'success': True, 'output': result.stdout}), 200
-        else:
+        if result.returncode != 0:
             return jsonify({'error': 'Training failed', 'details': result.stderr, 'output': result.stdout}), 500
+
+        # --- Extract Animations Step ---
+        animations_output = os.path.join(abs_output_path, 'cluster_animations.json')
+        cmd_anim = [
+            sys.executable, 
+            backend_script,
+            '--manifest', manifest_path,
+            '--extract-animations',
+            '--animations-output', animations_output
+        ]
+        
+        print(f"Running animation extraction: {' '.join(cmd_anim)}")
+        res_anim = subprocess.run(cmd_anim, capture_output=True, text=True, cwd=genai_dir)
+        
+        if res_anim.returncode != 0:
+            # Don't fail the whole request, but warn
+            app.logger.warning(f"Animation extraction failed: {res_anim.stderr}")
+            # Append warning to output?
+        
+        return jsonify({
+            'success': True, 
+            'output': result.stdout + "\n" + res_anim.stdout,
+            'animations_extracted': res_anim.returncode == 0
+        }), 200
             
     except Exception as e:
         app.logger.error(f"Classifier training error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/model/animations', methods=['GET'])
+def get_model_animations():
+    try:
+        # Resolve output path
+        root_dir = os.path.dirname(os.path.dirname(__file__))
+        config_path = os.path.join(root_dir, 'gesture_config.json')
+        output_path = 'genai/result'
+        
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                 conf = json.load(f)
+                 output_path = conf.get('output_path', 'genai/result')
+        
+        abs_output_path = output_path if os.path.isabs(output_path) else os.path.join(root_dir, output_path)
+        anim_path = os.path.join(abs_output_path, 'cluster_animations.json')
+        
+        if not os.path.exists(anim_path):
+            return jsonify({'error': 'Animations not found. Please train the model.'}), 404
+            
+        return send_from_directory(os.path.dirname(anim_path), os.path.basename(anim_path))
+    except Exception as e:
+        app.logger.error(f"Serve animations error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/model/onnx', methods=['GET'])

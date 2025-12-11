@@ -79,12 +79,94 @@ function normalizeSkeleton(landmarks: any[]): number[] {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
+// --- Gesture Animation Preview Component ---
+const GesturePreview = ({ animation, width = 120, height = 120, color = "#4ADE80" }: { animation: any, width?: number, height?: number, color?: string }) => {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const requestRef = useRef<number>();
+    const frameIndex = useRef(0);
+    const startTimeRef = useRef<number>(0);
+
+    useEffect(() => {
+        if (!animation || !animation.sequence || animation.sequence.length === 0) return;
+
+        const seq = animation.sequence;
+        const fps = 12; // Target FPS for playback
+        const interval = 1000 / fps;
+
+        const animate = (time: number) => {
+            if (time - startTimeRef.current > interval) {
+                startTimeRef.current = time;
+                frameIndex.current = (frameIndex.current + 1) % seq.length;
+
+                const ctx = canvasRef.current?.getContext('2d');
+                if (ctx) {
+                    ctx.clearRect(0, 0, width, height);
+
+                    // Landmarks are [x,y,z,v, ...]. 
+                    // Classification.py extracts raw (0..1) coords from MediaPipe sequences.
+                    const frameData = seq[frameIndex.current];
+
+                    // Helper to get point
+                    const getPoint = (idx: number) => {
+                        // idx is landmark index (0..32)
+                        // data is flat array
+                        const base = idx * 4;
+                        return { x: frameData[base], y: frameData[base + 1] };
+                    };
+
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 2;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+
+                    // Draw Connections
+                    // Use the POSE_CONNECTIONS defined globally
+                    ctx.beginPath();
+                    POSE_CONNECTIONS.forEach(([start, end]) => {
+                        const p1 = getPoint(start);
+                        const p2 = getPoint(end);
+                        // Check valid coords (approx 0..1)
+                        // Draw scaled
+                        if (p1.x > 0 && p2.x > 0) {
+                            ctx.moveTo(p1.x * width, p1.y * height);
+                            ctx.lineTo(p2.x * width, p2.y * height);
+                        }
+                    });
+                    ctx.stroke();
+                }
+            }
+            requestRef.current = requestAnimationFrame(animate);
+        };
+
+        requestRef.current = requestAnimationFrame(animate);
+        return () => {
+            if (requestRef.current) cancelAnimationFrame(requestRef.current);
+        };
+    }, [animation, width, height, color]);
+
+    if (!animation) return <div style={{ width, height, background: 'rgba(0,0,0,0.2)', borderRadius: 8 }} />;
+
+    return (
+        <canvas
+            ref={canvasRef}
+            width={width}
+            height={height}
+            style={{
+                background: 'rgba(0,0,0,0.5)',
+                borderRadius: 8,
+                border: '1px solid rgba(255,255,255,0.1)'
+            }}
+        />
+    );
+};
+
 export default function TestTab() {
     // State
     const [modelLoading, setModelLoading] = useState(true);
     const [modelError, setModelError] = useState<string | null>(null);
     const [labels, setLabels] = useState<string[]>([]);
-    const [prediction, setPrediction] = useState<{ label: string; confidence: number } | null>(null);
+    const [animations, setAnimations] = useState<any>(null); // Store animations map
+    const [prediction, setPrediction] = useState<{ label: string; confidence: number; index: number } | null>(null);
     const [inferenceTime, setInferenceTime] = useState<number>(0);
 
     // Refs
@@ -107,6 +189,17 @@ export default function TestTab() {
                 if (!labelsRes.ok) throw new Error("Failed to load labels");
                 const labelsData = await labelsRes.json();
                 setLabels(labelsData.class_names);
+
+                // 1b. Load Animations (Optional)
+                try {
+                    const animRes = await fetch(`${API_URL}/api/model/animations`);
+                    if (animRes.ok) {
+                        const animData = await animRes.json();
+                        setAnimations(animData.animations);
+                    }
+                } catch (e) {
+                    console.warn("Animations not found or failed to load", e);
+                }
 
                 // 2. Load MediaPipe Pose from NPM
 
@@ -339,7 +432,7 @@ export default function TestTab() {
             const confidence = expScores[maxIdx] / sumExp;
             const label = labels[maxIdx] || `Class ${maxIdx}`;
 
-            setPrediction({ label, confidence });
+            setPrediction({ label, confidence, index: maxIdx });
             setInferenceTime(performance.now() - start);
 
         } catch (e) {
@@ -380,7 +473,15 @@ export default function TestTab() {
                     <Card sx={{ flex: 1 }}>
                         <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
                             <Typography variant="body2" color="text.secondary">Prediction</Typography>
-                            <Typography variant="h3" color="primary" sx={{ my: 2 }}>
+
+                            {/* Preview Animation */}
+                            {animations && prediction && animations[String(prediction.index)] && (
+                                <Box sx={{ my: 2 }}>
+                                    <GesturePreview animation={animations[String(prediction.index)]} />
+                                </Box>
+                            )}
+
+                            <Typography variant="h3" color="primary" sx={{ my: 1 }}>
                                 {prediction ? prediction.label : "Waiting..."}
                             </Typography>
                             {prediction && (
