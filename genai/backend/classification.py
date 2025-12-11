@@ -390,10 +390,20 @@ def train_classifier(manifest_path: str, output_model_path: str):
     
     # Save class labels
     labels_path = output_model_path.replace('.onnx', '_labels.json')
+    
+    # Extract class names from manifest if available
+    class_names = []
+    for i in range(num_classes):
+        cluster_data = manifest['clusters'].get(str(i))
+        if cluster_data and 'label' in cluster_data:
+            class_names.append(cluster_data['label'])
+        else:
+            class_names.append(f'gesture_{i}')
+
     with open(labels_path, 'w') as f:
         json.dump({
             'num_classes': num_classes,
-            'class_names': [f'gesture_{i}' for i in range(num_classes)]
+            'class_names': class_names
         }, f, indent=2)
     
     print(f"Labels saved to: {labels_path}")

@@ -1,8 +1,8 @@
 {
   "num_classes": 3,
   "class_names": [
-    "gesture_0",
-    "gesture_1",
-    "gesture_2"
+    "cest_nul",
+    "loop",
+    "machine"
   ]
 }
