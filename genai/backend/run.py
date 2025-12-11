@@ -45,11 +45,7 @@ def load_config():
     # Default configuration
     defaults = {
         'analysis_fps': 12,
-        'gesture_min_seconds': 2,
-        'gesture_max_seconds': 6,
-        'n_clusters': None,
-        'use_hdbscan': False, 
-        'dtw_downsample_factor': 1
+        'output_path': 'genai/result'
     }
     
     if os.path.exists(config_path):
@@ -65,7 +61,28 @@ def load_config():
 
 _config = load_config()
 ANALYSIS_FPS = _config['analysis_fps']
-OUTPUT_DIR = 'output/clusters' # Output to root output/clusters
+OUTPUT_PATH = _config['output_path']
+
+# Determine absolute path for output
+# If relative, make it relative to project root (parent of genai/) or CWD? 
+# The script is run from genai/. CWD is c:\ML\perso\pose-trainer\genai
+# If output_path is 'genai/result', we probably want it relative to CWD parent?
+# Or if CWD is 'genai', then 'result' works?
+# The user specified "default is genai/result". If running from root, that's fine.
+# If running from genai/, we might need to adjust.
+# Let's rely on standard path resolution relative to CWD.
+OUTPUT_DIR = OUTPUT_PATH
+if not os.path.isabs(OUTPUT_DIR):
+    # If we are in genai/ folder, and path starts with genai/, we might be duping?
+    # No, typically relative to CWD.
+    # main.py runs this script with CWD='genai'.
+    # So if path is 'genai/result', it tries to create 'genai/genai/result'.
+    # We should probably fix the path if running from subdir.
+    cwd = os.getcwd()
+    if os.path.basename(cwd) == 'genai' and OUTPUT_PATH.startswith('genai/'):
+        OUTPUT_DIR = OUTPUT_PATH.replace('genai/', '', 1)
+    
+print(f"Output directory: {OUTPUT_DIR}")
 
 # ============================================================================
 # SKELETON NORMALIZATION (Reused)
@@ -157,11 +174,34 @@ def main():
         print(f"Error: Dataset directory not found at {dataset_root}")
         return
 
+    # Sanitize reserved filenames on Windows (e.g., 'nul', 'con', 'prn')
+    if os.name == 'nt':
+        reserved_names = {'nul', 'con', 'prn', 'aux', 'com1', 'com2', 'com3', 'com4', 'lpt1', 'lpt2', 'lpt3', 'lpt4'}
+        for name in os.listdir(dataset_root):
+            if name.lower() in reserved_names:
+                old_path = os.path.join(dataset_root, name)
+                # Use \\?\(abspath) to handle reserved names if normal path fails, but straight rename might fail too.
+                # Python's rename might work if we are careful.
+                # Try absolute path with extended prefix for robustness
+                abs_old_path = os.path.abspath(old_path)
+                if not abs_old_path.startswith('\\\\?\\'):
+                    abs_old_path = '\\\\?\\' + abs_old_path
+                
+                new_name = f"{name}_safe"
+                new_path = os.path.join(dataset_root, new_name)
+                
+                print(f"[WARN] Found reserved folder name '{name}'. Renaming to '{new_name}'...")
+                try:
+                    os.rename(abs_old_path, new_path)
+                except Exception as e:
+                    print(f"[ERR] Failed to rename reserved folder '{name}': {e}")
+                    print("      Please rename this folder manually to proceed.")
+
     print(f"Scanning dataset at: {dataset_root}")
     
     # Find all class folders (excluding Unsorted)
     classes = [d for d in os.listdir(dataset_root) 
-              if os.path.isdir(os.path.join(dataset_root, d)) and d != 'Unsorted']
+              if os.path.isdir(os.path.join(dataset_root, d)) and d not in ['Unsorted']]
     
     if not classes:
         print("No class folders found in dataset directory!")
@@ -175,8 +215,8 @@ def main():
     manifest_clusters = {}
     total_gestures = 0
     
-    root_output_dir = os.path.join(os.path.dirname(os.getcwd()) if 'genai' in os.getcwd() else os.getcwd(), 'output')
-    clusters_output_dir = os.path.join(root_output_dir, 'clusters')
+    # OUTPUT_DIR is already resolved from config
+    clusters_output_dir = os.path.join(OUTPUT_DIR, 'clusters')
     os.makedirs(clusters_output_dir, exist_ok=True)
 
     # Dictionary to store class name mapping
@@ -237,7 +277,7 @@ def main():
         'class_map': class_map # Save the mapping for reference
     }
     
-    manifest_path = os.path.join(root_output_dir, 'clustering_manifest.json')
+    manifest_path = os.path.join(OUTPUT_DIR, 'clustering_manifest.json')
     
     # Manually serialize to avoid issues? standard json dump works.
     with open(manifest_path, 'w') as f:

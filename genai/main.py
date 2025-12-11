@@ -182,16 +182,15 @@ def get_gesture_config():
         if os.path.exists(config_path):
             with open(config_path, 'r') as f:
                 config = json.load(f)
+            # Ensure output_path exists in response
+            if 'output_path' not in config:
+                config['output_path'] = 'genai/result'
             return jsonify(config), 200
         else:
             # Default config if file doesn't exist
             return jsonify({
                 "analysis_fps": 12,
-                "gesture_min_seconds": 2,
-                "gesture_max_seconds": 6,
-                "n_clusters": None,
-                "use_hdbscan": False,
-                "dtw_downsample_factor": 1
+                "output_path": "genai/result"
             }), 200
     except Exception as e:
         app.logger.error(f"Get config error: {str(e)}")
@@ -203,12 +202,7 @@ def update_gesture_config():
         data = request.json
         config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'gesture_config.json')
         
-        # Validate keys (optional but good practice)
-        base_keys = ["analysis_fps", "gesture_min_seconds", "gesture_max_seconds", "n_clusters", "use_hdbscan", "dtw_downsample_factor"]
-        
-        # Read existing or default to preserve other keys if any? 
-        # For now, just rewrite the file with provided data + defaults if missing
-        
+        # Write config
         with open(config_path, 'w') as f:
             json.dump(data, f, indent=4)
             
@@ -220,47 +214,51 @@ def update_gesture_config():
 @app.route('/api/train/mediapipe', methods=['POST'])
 def train_mediapipe():
     try:
-        # Trigger run.py
         import subprocess
         
-        # Paths relative to genai/
-        # Root dir where main.py is: c:\ML\perso\pose-trainer\genai
         genai_dir = os.path.dirname(__file__) 
-        
-        # run.py is in backend/
         script_path = os.path.join(genai_dir, 'backend', 'run.py')
         
-        # We run it with CWD as genai_dir so it can find 'backend' package if needed,
-        # OR we run it with CWD as backend dir?
-        # run.py expects to find 'gestures_config.json' which is in root (../ relative to backend, or ./ relative to root).
-        # And it scans 'dataset/' which is in genai/ dataset/.
+        # Read output path from config to ensure directory exists
+        output_path = 'genai/result'
+        config_path = os.path.join(os.path.dirname(genai_dir), 'gesture_config.json')
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                 conf = json.load(f)
+                 output_path = conf.get('output_path', 'genai/result')
         
-        # Let's set CWD to genai_dir
+        # Create output directory
+        if not os.path.isabs(output_path):
+            # If relative, it's relative to root or genai? 
+            # Let's assume relative to root (where main.py is parent dir)
+            # Actually main.py is in genai/. Root is parent.
+            # If user types "genai/result", and we run from genai/, that works if we are cautious.
+            # Let's resolve validation. ideally user types relative to root.
+            abs_output = os.path.abspath(os.path.join(os.path.dirname(genai_dir), output_path))
+        else:
+            abs_output = output_path
+            
+        os.makedirs(abs_output, exist_ok=True)
+        
         cwd = genai_dir
-        
-        # Force UTF-8 encoding for the subprocess to avoid UnicodeEncodeErrors on Windows
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
         
         print(f"Running MediaPipe training: {sys.executable} {script_path}")
         
-        # Capture both stdout and stderr
         result = subprocess.run(
             [sys.executable, script_path], 
             capture_output=True, 
             text=True, 
             cwd=cwd,
             env=env,
-            encoding='utf-8', # Force reading output as utf-8
-            errors='replace'  # Replace invalid chars if any
+            encoding='utf-8', 
+            errors='replace'
         )
         
         if result.returncode == 0:
             return jsonify({'success': True, 'output': result.stdout}), 200
         else:
-            print(f"Training failed. Return code: {result.returncode}")
-            print(f"STDOUT: {result.stdout}")
-            print(f"STDERR: {result.stderr}")
             app.logger.error(f"Training failed: {result.stderr}")
             return jsonify({'error': 'Training failed', 'details': result.stderr, 'output': result.stdout}), 500
             
@@ -273,19 +271,23 @@ def train_classifier():
     try:
         import subprocess
         
-        # Paths relative to genai/
         root_dir = os.path.dirname(os.path.dirname(__file__)) # c:\ML\perso\pose-trainer
         genai_dir = os.path.dirname(__file__) # c:\ML\perso\pose-trainer\genai
         backend_script = os.path.join(genai_dir, 'backend', 'classification.py')
         
-        # Arguments
-        # Manifest is in root output/
-        manifest_path = os.path.join(root_dir, 'output', 'clustering_manifest.json')
-        # Model output to root models/
-        model_output = os.path.join(root_dir, 'models', 'gesture_classifier.onnx')
+        # Read config for path
+        output_path = 'genai/result'
+        config_path = os.path.join(root_dir, 'gesture_config.json')
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                 conf = json.load(f)
+                 output_path = conf.get('output_path', 'genai/result')
         
-        # Ensure models dir exists
-        os.makedirs(os.path.dirname(model_output), exist_ok=True)
+        abs_output_path = output_path if os.path.isabs(output_path) else os.path.join(root_dir, output_path)
+        
+        # Arguments
+        manifest_path = os.path.join(abs_output_path, 'clustering_manifest.json')
+        model_output = os.path.join(abs_output_path, 'gesture_classifier.onnx')
         
         cmd = [
             sys.executable, 

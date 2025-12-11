@@ -30,8 +30,8 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
-# Add scripts directory to path
-# sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'scripts'))
+# Add scripts directory to path (if needed later)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'training'))
 
 import config
 from gesture_detector import TemporalPoseModel
@@ -236,7 +236,7 @@ def train_classifier(manifest_path: str, output_model_path: str):
     can_stratify = test_samples >= num_classes and min_samples_per_class >= 2
     
     if not can_stratify:
-        print(f"\n⚠️  WARNING: Too many classes ({num_classes}) for {len(sequences)} samples")
+        print(f"\n[WARN]  WARNING: Too many classes ({num_classes}) for {len(sequences)} samples")
         print(f"   Cannot use stratified split (need at least {num_classes} test samples)")
         print(f"   Using simple random split instead")
         print(f"   Consider reducing min_cluster_size in HDBSCAN or collecting more data\n")
@@ -402,58 +402,12 @@ def train_classifier(manifest_path: str, output_model_path: str):
     print("TRAINING COMPLETE")
     print("=" * 70)
     
-    # ========================================================================
-    # DEPLOYMENT WORKFLOW
-    # ========================================================================
-    print("\n" + "=" * 70)
-    print("DEPLOYING MODEL TO PUBLIC FOLDER")
-    print("=" * 70)
-    
-    import shutil
-    import zipfile
-    
-    # 1. Copy ONNX model to public folder
-    public_dir = 'public'
-    os.makedirs(public_dir, exist_ok=True)
-    
-    public_model_path = os.path.join(public_dir, 'gesture_classifier.onnx')
-    shutil.copy2(output_model_path, public_model_path)
-    print(f"✅ Copied model to: {public_model_path}")
-    
-    # 2. Create public.zip for easy download
-    zip_path = 'public.zip'
-    print(f"\n📦 Creating {zip_path}...")
-    
-    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for root, dirs, files in os.walk(public_dir):
-            for file in files:
-                file_path = os.path.join(root, file)
-                arcname = os.path.relpath(file_path, start=os.path.dirname(public_dir))
-                zipf.write(file_path, arcname)
-                print(f"  Added: {arcname}")
-    
-    print(f"✅ Created {zip_path} ({os.path.getsize(zip_path) / 1024:.1f} KB)")
-    
-    # 3. Copy public folder to output directory
-    manifest_dir = os.path.dirname(manifest_path)
-    output_public_dir = os.path.join(manifest_dir, 'public')
-    
-    if os.path.exists(output_public_dir):
-        shutil.rmtree(output_public_dir)
-    
-    shutil.copytree(public_dir, output_public_dir)
-    print(f"✅ Copied public folder to: {output_public_dir}")
-    
     #  Print summary
     print("\n" + "=" * 70)
-    print("DEPLOYMENT COMPLETE")
+    print("TRAINING COMPLETE")
     print("=" * 70)
-    print(f"\n📍 Model Locations:")
+    print(f"\n[INFO] Model Location:")
     print(f"  Training output: {output_model_path}")
-    print(f"  Public folder: {public_model_path}")
-    print(f"  Output archive: {output_public_dir}")
-    print(f"\n📦 Download Package:")
-    print(f"  {zip_path} - Ready for deployment")
     print()
 
 

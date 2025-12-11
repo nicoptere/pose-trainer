@@ -18,11 +18,13 @@ import SaveIcon from '@mui/icons-material/Save';
 // Configuration Interface
 interface GestureConfig {
     analysis_fps: number;
-    gesture_min_seconds: number;
-    gesture_max_seconds: number;
-    n_clusters: number | null;
-    use_hdbscan: boolean;
-    dtw_downsample_factor: number;
+    output_path?: string;
+    // Legacy/Unused fields removed or made optional
+    gesture_min_seconds?: number;
+    gesture_max_seconds?: number;
+    n_clusters?: number | null;
+    use_hdbscan?: boolean;
+    dtw_downsample_factor?: number;
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -185,7 +187,7 @@ export default function TrainingTab() {
                 {successMsg && <Alert severity="success" sx={{ mb: 2 }}>{successMsg}</Alert>}
 
                 <Grid container spacing={3}>
-                    <Grid size={{ xs: 12, md: 6 }}>
+                    <Grid size={{ xs: 12 }}>
                         <TextField
                             fullWidth
                             label="Analysis FPS"
@@ -196,67 +198,15 @@ export default function TrainingTab() {
                         />
                     </Grid>
 
-                    <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField
-                            fullWidth
-                            label="DTW Downsample Factor"
-                            type="number"
-                            value={config.dtw_downsample_factor}
-                            onChange={(e) => handleInputChange('dtw_downsample_factor', Number(e.target.value))}
-                            helperText="Reduce temporal resolution for DTW (1 = no downsample)"
-                        />
-                    </Grid>
-
-                    <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField
-                            fullWidth
-                            label="Min Gesture Duration (seconds)"
-                            type="number"
-                            value={config.gesture_min_seconds}
-                            onChange={(e) => handleInputChange('gesture_min_seconds', Number(e.target.value))}
-                        />
-                    </Grid>
-
-                    <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField
-                            fullWidth
-                            label="Max Gesture Duration (seconds)"
-                            type="number"
-                            value={config.gesture_max_seconds}
-                            onChange={(e) => handleInputChange('gesture_max_seconds', Number(e.target.value))}
-                        />
-                    </Grid>
-
-                    <Grid size={{ xs: 12 }}>
-                        <FormControlLabel
-                            control={
-                                <Switch
-                                    checked={config.use_hdbscan}
-                                    onChange={(e) => handleInputChange('use_hdbscan', e.target.checked)}
-                                />
-                            }
-                            label={
-                                <Box>
-                                    <Typography variant="body1">Use HDBSCAN Clustering</Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                        Automatically determine number of clusters
-                                    </Typography>
-                                </Box>
-                            }
-                        />
-                    </Grid>
-
                     <Grid size={{ xs: 12 }}>
                         <TextField
                             fullWidth
-                            label="Number of Clusters (Manual)"
-                            type="number"
-                            disabled={config.use_hdbscan}
-                            value={config.n_clusters ?? ''}
-                            onChange={(e) => handleInputChange('n_clusters', e.target.value === '' ? null : Number(e.target.value))}
-                            helperText={config.use_hdbscan ? "Disabled when using HDBSCAN" : "Specify fixed number of clusters"}
+                            label="Output Destination"
+                            value={config.output_path || 'genai/result'}
+                            onChange={(e) => handleInputChange('output_path', e.target.value)}
+                            helperText="Folder to save training artifacts and models"
                             slotProps={{
-                                htmlInput: { placeholder: "Auto" }
+                                htmlInput: { placeholder: "genai/result" }
                             }}
                         />
                     </Grid>
