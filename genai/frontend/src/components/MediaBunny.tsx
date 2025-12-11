@@ -21,6 +21,62 @@ function formatTime(s: number) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+// Draggable Timeline Clip Component
+function DraggableTimelineClip({ clip, duration, editingClipId, isCreating, onSelect, onHover, onHoverLeave }: {
+    clip: VideoClip,
+    duration: number,
+    editingClipId: string | null,
+    isCreating: boolean,
+    onSelect: (id: string, e: React.MouseEvent) => void,
+    onHover: (e: React.MouseEvent, clip: VideoClip) => void,
+    onHoverLeave: () => void
+}) {
+    const draggableId = `editor-${clip.id}`;
+    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+        id: draggableId,
+        data: {
+            type: 'Video',
+            clip,
+            originalId: clip.id
+        },
+        disabled: isCreating // Disable dragging if we are in creation mode (or just if THIS clip is being edited? User might want to drag others)
+        // If isCreating is true, the editor is busy. Maybe disable ALL timeline drags to prevent confusion? 
+        // Existing logic for 'Box' had pointerEvents: isCreating ? 'none' : 'auto'. 
+        // So we should respect that.
+    });
+
+    if (clip.startTime === undefined || clip.endTime === undefined) return null;
+
+    return (
+        <Box
+            ref={setNodeRef}
+            {...listeners}
+            {...attributes}
+            sx={{
+                position: 'absolute',
+                left: `${(clip.startTime / duration) * 100}%`,
+                width: `${((clip.endTime - clip.startTime) / duration) * 100}%`,
+                height: '100%',
+                bgcolor: clip.color || 'gray',
+                opacity: isDragging ? 0.3 : 0.6,
+                border: editingClipId === clip.id ? '2px solid white' : 'none',
+                boxSizing: 'border-box',
+                borderLeft: '2px solid rgba(0,0,0,0.5)',
+                borderRight: '2px solid rgba(0,0,0,0.5)',
+                cursor: 'grab',
+                pointerEvents: isCreating ? 'none' : 'auto'
+            }}
+            onClick={(e) => {
+                // dnd-kit allows onClick if no drag occurred
+                e.stopPropagation(); // Prevent timeline background click
+                onSelect(clip.id, e);
+            }}
+            onMouseEnter={(e) => onHover(e, clip)}
+            onMouseLeave={onHoverLeave}
+        />
+    );
+}
+
 function DraggableSubclipThumbnail({ clip, onDelete, onSelect, isEditing, isPlaying, onPlayPause }: {
     clip: VideoClip,
     onDelete: (id: string) => void,
@@ -853,38 +909,28 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                     }}
                 >
                     {/* Existing Clips Markers */}
+                    {/* Existing Clips Markers */}
                     {existingSubclips.map(clip => (
-                        clip.startTime !== undefined && clip.endTime !== undefined && (
-                            <Box
-                                key={clip.id}
-                                sx={{
-                                    position: 'absolute',
-                                    left: `${(clip.startTime / duration) * 100}%`,
-                                    width: `${((clip.endTime - clip.startTime) / duration) * 100}%`,
-                                    height: '100%',
-                                    bgcolor: clip.color || 'gray',
-                                    opacity: 0.6,
-                                    border: editingClipId === clip.id ? '2px solid white' : 'none',
-                                    boxSizing: 'border-box',
-                                    borderLeft: '2px solid rgba(0,0,0,0.5)',
-                                    borderRight: '2px solid rgba(0,0,0,0.5)',
-                                    cursor: 'pointer',
-                                    pointerEvents: isCreating ? 'none' : 'auto'
-                                }}
-                                onMouseDown={(e) => {
-                                    e.stopPropagation();
-                                    setEditingClipId(clip.id);
-                                    setSelection([clip.startTime!, clip.endTime!]);
-                                    selectionRef.current = [clip.startTime!, clip.endTime!];
+                        <DraggableTimelineClip
+                            key={clip.id}
+                            clip={clip}
+                            duration={duration}
+                            editingClipId={editingClipId}
+                            isCreating={isCreating}
+                            onSelect={(id) => {
+                                setEditingClipId(id);
+                                if (clip.startTime !== undefined && clip.endTime !== undefined) {
+                                    setSelection([clip.startTime, clip.endTime]);
+                                    selectionRef.current = [clip.startTime, clip.endTime];
                                     setIsCreating(true);
-                                }}
-                                onMouseEnter={(e) => {
-                                    setHoveredClip(clip);
-                                    setHoverPosition({ x: e.clientX, y: e.clientY - 150 });
-                                }}
-                                onMouseLeave={() => setHoveredClip(null)}
-                            />
-                        )
+                                }
+                            }}
+                            onHover={(e, c) => {
+                                setHoveredClip(c);
+                                setHoverPosition({ x: e.clientX, y: e.clientY - 150 });
+                            }}
+                            onHoverLeave={() => setHoveredClip(null)}
+                        />
                     ))}
 
                     {/* Active Creation Zone (Overlay) */}

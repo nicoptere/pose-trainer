@@ -46,11 +46,21 @@ export default function ClassManager() {
 
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
+        const activeIdStr = active.id as string;
         // Strip 'editor-' prefix if present from MediaBunny items
-        const rawActiveId = (active.id as string).replace('editor-', '');
+        const isFromEditor = activeIdStr.startsWith('editor-');
+        const rawActiveId = activeIdStr.replace('editor-', '');
 
         if (over && rawActiveId !== over.id) {
             moveVideo(rawActiveId, over.id as string);
+
+            // Interrupt edition if dragged from editor
+            if (isFromEditor) {
+                setIsEditing(false);
+                setEditingVideoId(null);
+                setClickedSubclipId(null);
+                setPreviewUrl(null);
+            }
         }
         setActiveId(null);
     };
