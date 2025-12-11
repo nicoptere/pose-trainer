@@ -11,7 +11,7 @@ interface Props {
     url: string;
     thumbnailUrl?: string; // Base64 or standard URL
     name: string;
-    width?: number;
+    width?: number | string;
     onClick?: () => void;
     onHover?: (e: React.MouseEvent, videoId: string) => void;
     onLeave?: () => void;
@@ -35,7 +35,7 @@ export function DraggableVideo({ id, url, thumbnailUrl, name, width = 80, onClic
     return (
         <div
             ref={setNodeRef}
-            style={style}
+            style={{ ...style, width: '100%', minWidth: 0 }}
             {...listeners}
             {...attributes}
             onClick={onClick}
@@ -45,7 +45,8 @@ export function DraggableVideo({ id, url, thumbnailUrl, name, width = 80, onClic
                 onMouseLeave={onLeave}
                 sx={{
                     width: width,
-                    m: 0.5,
+                    // Remove margin as Grid gap handles spacing
+                    // m: 0.5, 
                     boxShadow: 1,
                     position: 'relative',
                     border: color ? `2px solid ${color}` : 'none'
@@ -54,13 +55,13 @@ export function DraggableVideo({ id, url, thumbnailUrl, name, width = 80, onClic
                     <CardMedia
                         component="img"
                         src={thumbnailUrl}
-                        sx={{ height: width * 0.56, bgcolor: 'black', objectFit: 'cover' }} // approx 16:9
+                        sx={{ aspectRatio: '16/9', bgcolor: 'black', objectFit: 'cover', width: '100%' }}
                     />
                 ) : (
                     <CardMedia
                         component="video"
                         src={url}
-                        sx={{ height: width * 0.56, bgcolor: 'black' }}
+                        sx={{ aspectRatio: '16/9', bgcolor: 'black', width: '100%' }}
                     />
                 )}
                 <Box sx={{ p: 0.5 }}>

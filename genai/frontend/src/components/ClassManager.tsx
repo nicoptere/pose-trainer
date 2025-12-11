@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { DndContext, DragOverlay, DragStartEvent, DragEndEvent, useSensor, useSensors, PointerSensor } from '@dnd-kit/core';
+import { DndContext, DragOverlay, DragStartEvent, DragEndEvent, useSensor, useSensors, PointerSensor, useDroppable } from '@dnd-kit/core';
 import { Box, Typography, TextField, Paper, InputAdornment, Button, Slider, IconButton, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, CircularProgress } from '@mui/material';
 import { Search, Add, Close, Delete } from '@mui/icons-material';
 import { useStore } from '../store/useStore';
@@ -22,10 +22,11 @@ export default function ClassManager() {
     const [isEditing, setIsEditing] = useState(false);
     const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
     const [clickedSubclipId, setClickedSubclipId] = useState<string | null>(null); // To trigger edit mode in MediaBunny
-    const [zoomLevel, setZoomLevel] = useState(128);
+    const [columns, setColumns] = useState(2); // Grid columns, default 2
     const [confirmDeleteVideoId, setConfirmDeleteVideoId] = useState<string | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
     const [isDragOver, setIsDragOver] = useState(false);
+    const [collectionSearch, setCollectionSearch] = useState('');
 
     // Handle prefixed IDs from MediaBunny draggable
     const activeVideoIdRaw = activeId ? (activeId.startsWith('editor-') ? activeId.replace('editor-', '') : activeId) : null;
@@ -55,19 +56,30 @@ export default function ClassManager() {
     };
 
     // 1. Get Unsorted Videos (Left Panel) - ONLY root classes (not subclips)
-    const unsortedVideos = videos.filter(v => (v.classId === 'Unsorted' || !v.classId) && !v.parentVideoId);
+    // Filter by collectionSearch
+    const unsortedVideos = videos
+        .filter(v => (v.classId === 'Unsorted' || !v.classId) && !v.parentVideoId)
+        .filter(v => v.name.toLowerCase().includes(collectionSearch.toLowerCase()));
 
     // 2. Get Right Panel Classes (Filtered)
     const definedClasses = classes.filter(c => c.name !== 'Unsorted');
 
-    // Apply Search Filter
-    const filteredClasses = definedClasses.filter(c =>
-        c.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Apply Search Filter (Updated to include subclip names)
+    const filteredClasses = definedClasses.filter(c => {
+        const matchesName = c.name.toLowerCase().includes(searchTerm.toLowerCase());
+        const classVideos = videos.filter(v => v.classId === c.id);
+        const hasMatchingVideo = classVideos.some(v => v.name.toLowerCase().includes(searchTerm.toLowerCase()));
+        return matchesName || hasMatchingVideo;
+    });
 
     const uniqueClassNames = Array.from(new Set([
         ...filteredClasses.map(c => c.name)
     ]));
+
+    // Droppable for Unsorted list
+    const { setNodeRef: setUnsortedRef, isOver: isUnsortedOver } = useDroppable({
+        id: 'Unsorted',
+    });
 
     return (
         <DndContext
@@ -84,73 +96,71 @@ export default function ClassManager() {
                         transition: 'width 0.3s ease',
                         display: 'flex',
                         flexDirection: 'column',
-                        // Removed elevation and overflow:hidden to prevent artifacts
                         borderRight: '1px solid rgba(0,0,0,0.12)',
                         bgcolor: 'background.paper'
                     }}
                 >
-
-                    {/* Video Preview Area / MediaBunny Editor */}
-                    <Box sx={{ p: 2, bgcolor: '#000', flex: isEditing ? 1 : '0 0 auto', minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 1, position: 'relative' }}>
-                        {isEditing && (
-                            <IconButton
-                                color="secondary"
-                                size="small"
-                                sx={{ position: 'absolute', top: 5, right: 5, zIndex: 100, bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}
-                                onClick={() => {
-                                    setIsEditing(false);
-                                    setEditingVideoId(null);
-                                    setClickedSubclipId(null);
-                                }}
-                            >
-                                <Close sx={{ color: 'white' }} />
-                            </IconButton>
-                        )}
-                        {isEditing && editingVideoId ? (
-                            <Box sx={{ width: '100%', height: '100%' }}>
-                                <MediaBunny
-                                    videoUrl={videos.find(v => v.id === editingVideoId)?.url || previewUrl || ''}
-                                    videoId={editingVideoId}
-                                    onClose={() => {
+                    {/* ... (Preview Code remains same) ... */}
+                    {(isEditing || previewUrl) && (
+                        <Box sx={{ p: 2, bgcolor: '#000', flex: isEditing ? 1 : '0 0 auto', minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 1, position: 'relative' }}>
+                            {isEditing && (
+                                <IconButton
+                                    color="secondary"
+                                    size="small"
+                                    sx={{ position: 'absolute', top: 5, right: 5, zIndex: 100, bgcolor: 'rgba(0,0,0,0.5)', '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' } }}
+                                    onClick={() => {
                                         setIsEditing(false);
                                         setEditingVideoId(null);
                                         setClickedSubclipId(null);
                                     }}
-                                    activeSubclipId={clickedSubclipId}
-                                />
-                            </Box>
-                        ) : previewUrl ? (
-                            <>
-                                <video
-                                    ref={(el) => {
-                                        if (el) {
-                                            el.playbackRate = 1.0;
-                                            el.defaultPlaybackRate = 1.0;
-                                        }
-                                    }}
-                                    src={previewUrl}
-                                    controls
-                                    autoPlay
-                                    style={{ maxWidth: '100%', maxHeight: '300px' }}
-                                />
-                                <Box sx={{ display: 'flex', gap: 1, width: '100%', justifyContent: 'center' }}>
-                                    <Button fullWidth variant="contained" size="small" color="primary" onClick={() => {
-                                        const vid = videos.find(v => v.url === previewUrl);
-                                        if (vid) {
-                                            setIsEditing(true);
-                                            setEditingVideoId(vid.id);
-                                        }
-                                    }}>
-                                        Edit
-                                    </Button>
+                                >
+                                    <Close sx={{ color: 'white' }} />
+                                </IconButton>
+                            )}
+                            {isEditing && editingVideoId ? (
+                                <Box sx={{ width: '100%', height: '100%' }}>
+                                    <MediaBunny
+                                        videoUrl={videos.find(v => v.id === editingVideoId)?.url || previewUrl || ''}
+                                        videoId={editingVideoId}
+                                        onClose={() => {
+                                            setIsEditing(false);
+                                            setEditingVideoId(null);
+                                            setClickedSubclipId(null);
+                                        }}
+                                        activeSubclipId={clickedSubclipId}
+                                    />
                                 </Box>
-                            </>
-                        ) : (
-                            <Typography variant="body2" color="grey.500">Select a video to preview</Typography>
-                        )}
-                    </Box>
+                            ) : previewUrl ? (
+                                <>
+                                    <video
+                                        ref={(el) => {
+                                            if (el) {
+                                                el.playbackRate = 1.0;
+                                                el.defaultPlaybackRate = 1.0;
+                                            }
+                                        }}
+                                        src={previewUrl}
+                                        controls
+                                        autoPlay
+                                        style={{ maxWidth: '100%', maxHeight: '300px' }}
+                                    />
+                                    <Box sx={{ display: 'flex', gap: 1, width: '100%', justifyContent: 'center' }}>
+                                        <Button fullWidth variant="contained" size="small" color="primary" onClick={() => {
+                                            const vid = videos.find(v => v.url === previewUrl);
+                                            if (vid) {
+                                                setIsEditing(true);
+                                                setEditingVideoId(vid.id);
+                                            }
+                                        }}>
+                                            Edit
+                                        </Button>
+                                    </Box>
+                                </>
+                            ) : null}
+                        </Box>
+                    )}
 
-                    {/* Inbox / Unsorted only shows root videos, not subclips */}
+                    {/* Inbox / Unsorted using direct droppable container */}
                     {!isEditing && (
                         <>
                             <Box sx={{ p: 1, bgcolor: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -160,16 +170,19 @@ export default function ClassManager() {
                             </Box>
 
                             <Box
+                                ref={setUnsortedRef}
                                 sx={{
                                     flex: 1,
                                     overflowY: 'auto',
                                     p: 1,
-                                    display: 'flex',
-                                    flexWrap: 'wrap',
-                                    alignContent: 'flex-start',
-                                    bgcolor: isDragOver ? 'rgba(0, 0, 255, 0.1)' : 'transparent',
-                                    border: isDragOver ? '2px dashed #1976d2' : 'none',
-                                    transition: 'all 0.2s'
+                                    bgcolor: (isDragOver || isUnsortedOver) ? 'rgba(0, 0, 255, 0.1)' : 'transparent',
+                                    border: (isDragOver || isUnsortedOver) ? '2px dashed #1976d2' : 'none',
+                                    transition: 'all 0.2s',
+                                    // Direct Grid Layout
+                                    display: 'grid',
+                                    gridTemplateColumns: `repeat(${columns}, 1fr)`,
+                                    gap: 1,
+                                    alignContent: 'start',
                                 }}
                                 onDragOver={(e) => {
                                     e.preventDefault();
@@ -191,36 +204,53 @@ export default function ClassManager() {
                                     }
                                 }}
                             >
-                                <DroppableClass id="Unsorted" title="">
-                                    {unsortedVideos.map(video => (
-                                        <DraggableVideo
-                                            key={video.id}
-                                            id={video.id}
-                                            url={video.url}
-                                            thumbnailUrl={video.thumbnailUrl}
-                                            name={video.name}
-                                            width={zoomLevel}
-                                            color={video.color}
-                                            onClick={() => setPreviewUrl(video.url)}
-                                            onDelete={() => setConfirmDeleteVideoId(video.id)}
-                                        />
-                                    ))}
-                                    {unsortedVideos.length === 0 && <Typography variant="caption" color="text.secondary">No videos</Typography>}
-                                </DroppableClass>
+                                {unsortedVideos.map(video => (
+                                    <DraggableVideo
+                                        key={video.id}
+                                        id={video.id}
+                                        url={video.url}
+                                        thumbnailUrl={video.thumbnailUrl}
+                                        name={video.name}
+                                        width="100%"
+                                        color={video.color}
+                                        onClick={() => setPreviewUrl(video.url)}
+                                        onDelete={() => setConfirmDeleteVideoId(video.id)}
+                                    />
+                                ))}
+                                {unsortedVideos.length === 0 && <Box sx={{ gridColumn: '1 / -1' }}><Typography variant="caption" color="text.secondary">No videos</Typography></Box>}
                             </Box>
 
-                            {/* Zoom Slider at Bottom */}
-                            <Box sx={{ p: 1, borderTop: '1px solid #ddd', display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography variant="caption">Size:</Typography>
-                                <Slider
+                            {/* Search and Columns Slider at Bottom */}
+                            <Box sx={{ p: 1, borderTop: '1px solid #ddd', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                <TextField
+                                    fullWidth
                                     size="small"
-                                    min={64}
-                                    max={256}
-                                    value={zoomLevel}
-                                    onChange={(e, val) => setZoomLevel(val as number)}
-                                    aria-label="Thumbnail Zoom"
-                                    sx={{ flex: 1 }}
+                                    placeholder="Filter collection..."
+                                    variant="standard"
+                                    value={collectionSearch}
+                                    onChange={(e) => setCollectionSearch(e.target.value)}
+                                    InputProps={{
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <Search fontSize="small" />
+                                            </InputAdornment>
+                                        ),
+                                    }}
                                 />
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Typography variant="caption">Columns:</Typography>
+                                    <Slider
+                                        size="small"
+                                        min={1}
+                                        max={5}
+                                        step={1}
+                                        value={columns}
+                                        onChange={(e, val) => setColumns(val as number)}
+                                        marks
+                                        aria-label="Columns"
+                                        sx={{ flex: 1 }}
+                                    />
+                                </Box>
                             </Box>
                         </>
                     )}
@@ -234,6 +264,7 @@ export default function ClassManager() {
                     flexDirection: 'column',
                     gap: 2
                 }}>
+                    <Typography variant="h6" sx={{ mt: 1, fontWeight: 'bold' }}>Classes</Typography>
                     <Box sx={{ display: 'flex', gap: 1 }}>
                         <TextField
                             fullWidth
@@ -300,7 +331,7 @@ export default function ClassManager() {
                                             url={video.url}
                                             thumbnailUrl={video.thumbnailUrl}
                                             name={video.name}
-                                            width={80}
+                                            width={80} // Fixed width for class list items
                                             color={video.color}
                                             startTime={video.startTime}
                                             onClick={() => {
@@ -316,11 +347,8 @@ export default function ClassManager() {
                                             }}
                                             onDelete={() => {
                                                 if (video.parentVideoId) {
-                                                    // Start/End are defined, it's a subclip. Unassign to show in editor again.
                                                     useStore.getState().updateVideo(video.id, { classId: 'Unsorted' });
                                                 } else {
-                                                    // Root video in a class: Move back to Unsorted or Delete?
-                                                    // "Remove from class" usually implies unassign.
                                                     useStore.getState().updateVideo(video.id, { classId: 'Unsorted' });
                                                 }
                                             }}

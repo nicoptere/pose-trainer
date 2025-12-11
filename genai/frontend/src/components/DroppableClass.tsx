@@ -11,9 +11,10 @@ interface Props {
     title: string;
     children: React.ReactNode;
     onDelete?: (id: string) => void | Promise<void>;
+    columns?: number;
 }
 
-export function DroppableClass({ id, title, children, onDelete }: Props) {
+export function DroppableClass({ id, title, children, onDelete, columns }: Props) {
     const { isOver, setNodeRef } = useDroppable({
         id: id,
     });
@@ -32,6 +33,7 @@ export function DroppableClass({ id, title, children, onDelete }: Props) {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                 <Typography variant="subtitle2" color={isOver ? 'primary' : 'textPrimary'} fontWeight="bold" sx={{ fontSize: '0.8rem' }}>
                     {title}
+                    {/* Add visual bug helper: show columns if > 1 */}
                 </Typography>
                 {onDelete && (
                     <IconButton
@@ -44,7 +46,14 @@ export function DroppableClass({ id, title, children, onDelete }: Props) {
                 )}
             </Box>
 
-            <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
+            <Box sx={columns ? {
+                display: 'grid',
+                gridTemplateColumns: `repeat(${columns}, 1fr)`,
+                gap: 1
+            } : {
+                display: 'flex',
+                flexWrap: 'wrap'
+            }}>
                 {children}
             </Box>
         </Paper>
