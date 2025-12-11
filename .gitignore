@@ -1,5 +1,6 @@
 *.mov
 *.mp4
+*.wav
 *.pt
 *.onnx
 *.npz

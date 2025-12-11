@@ -224,15 +224,25 @@ def sync_dataset(metadata, dataset_root):
                 # Normalization for comparison
                 full_path_norm = os.path.normpath(full_path)
                 
-                # Check if desired. We need to check normalized paths against normalized desired keys.
+                # Normalization for comparison
                 # Optimization: Normalize desired keys once?
-                # For now, simplistic check.
+                if 'desired_norm' not in locals():
+                     desired_norm = set(os.path.normpath(dp) for dp in desired_files)
+
                 is_desired = False
-                for dp in desired_files:
-                    if os.path.normpath(dp) == full_path_norm:
-                        is_desired = True
-                        break
+                if full_path_norm in desired_norm:
+                    is_desired = True
                 
+                # Protect sidecar audio files
+                if not is_desired and file.endswith('.wav'):
+                    # Check if the corresponding video file is desired
+                    base_acc = os.path.splitext(full_path_norm)[0]
+                    # Try common video extensions
+                    for vext in ['.mp4', '.mov', '.webm', '.mkv', '.avi']:
+                        if (base_acc + vext) in desired_norm:
+                            is_desired = True
+                            break
+
                 if not is_desired:
                     # Don't delete metadata.json!
                     if file == 'metadata.json': continue
@@ -258,8 +268,14 @@ def sync_dataset(metadata, dataset_root):
             # Check for changes if it's a subclip
             should_recompute = False
             if info['is_subclip']:
+                # Check if audio file exists (if not, we must recompute to generate it)
+                audio_path = os.path.splitext(target_path)[0] + ".wav"
+                if not os.path.exists(audio_path):
+                        print(f"Subclip {info['id']} missing audio: recomputing...")
+                        should_recompute = True
+
                 old_sc = old_subclips_map.get(info['id'])
-                if old_sc:
+                if old_sc and not should_recompute:
                     # Compare key properties
                     # We use a small epsilon for floats if needed, but equality is usually fine for JSON roundtrip
                     # Or check thumbnailUrl as user suggested (data url change)
@@ -371,9 +387,24 @@ def sync_dataset(metadata, dataset_root):
                         expected_duration = end_t - start_t
                         print(f"DEBUG: Writing subclip. Expected Duration: {expected_duration:.4f}s, Clip Duration: {new_clip.duration:.4f}s")
 
-                        # Write video without audio as requested
-                        # Bypass write_videofile decorators by using internal writer
-                        ffmpeg_write_video(new_clip, target_path, new_clip.fps, codec="libx264", audiofile=None)
+                        # Write Audio File separately (requested feature)
+                        if new_clip.audio:
+                            audio_target_path = os.path.splitext(target_path)[0] + ".wav"
+                            print(f"DEBUG: Writing separate audio to {audio_target_path}")
+                            new_clip.audio.write_audiofile(audio_target_path, codec='pcm_s16le', verbose=False, logger=None)
+
+                        # Write video with audio
+                        # Reverting to write_videofile to ensure proper audio muxing
+                        new_clip.write_videofile(
+                            target_path, 
+                            fps=my_fps, 
+                            codec="libx264", 
+                            audio_codec="aac", 
+                            temp_audiofile=f"temp-audio-{info['id']}.m4a",
+                            remove_temp=True,
+                            verbose=False,
+                            logger=None
+                        )
                 finally:
                     if os.path.exists(temp_safe_source):
                         try:
