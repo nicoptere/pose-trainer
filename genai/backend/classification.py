@@ -89,6 +89,33 @@ class GestureDataset(Dataset):
         return torch.FloatTensor(sequence), torch.LongTensor([label])[0]
 
 
+
+def normalize_skeleton(landmarks: np.ndarray) -> np.ndarray:
+    """Normalize skeleton to be invariant to position, scale, and orientation."""
+    # Reshape to (33, 4)
+    landmarks = landmarks.reshape(33, 4)
+    coords = landmarks[:, :3].copy()
+    visibility = landmarks[:, 3:4]
+    
+    left_shoulder = coords[11]
+    right_shoulder = coords[12]
+    left_hip = coords[23]
+    right_hip = coords[24]
+    
+    shoulder_mid = (left_shoulder + right_shoulder) / 2
+    hip_mid = (left_hip + right_hip) / 2
+    torso_center = (shoulder_mid + hip_mid) / 2
+    
+    centered = coords - torso_center
+    
+    torso_height = np.linalg.norm(shoulder_mid - hip_mid)
+    if torso_height < 1e-6: torso_height = 1.0
+    
+    scaled = centered / torso_height
+    
+    normalized = np.concatenate([scaled, visibility], axis=1)
+    return normalized.flatten()
+
 def load_gesture_sequence(
     video_path: str,
     start_frame: int,
@@ -97,15 +124,6 @@ def load_gesture_sequence(
 ) -> np.ndarray:
     """
     Load a gesture sequence from video.
-    
-    Args:
-        video_path: Path to source video
-        start_frame: Start frame in analysis FPS space
-        end_frame: End frame in analysis FPS space
-        analysis_fps: FPS used during analysis
-        
-    Returns:
-        Pose sequence array [num_frames, 132]
     """
     mp_pose = mp.solutions.pose
     pose = mp_pose.Pose(
@@ -142,7 +160,10 @@ def load_gesture_sequence(
             row = []
             for lm in results.pose_landmarks.landmark:
                 row.extend([lm.x, lm.y, lm.z, lm.visibility])
-            landmarks_list.append(row)
+            
+            # Normalize
+            normalized_row = normalize_skeleton(np.array(row))
+            landmarks_list.append(normalized_row)
         else:
             landmarks_list.append([0.0] * config.INPUT_SIZE)
     
