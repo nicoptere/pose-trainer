@@ -1,0 +1,282 @@
+import React, { useState, useEffect } from 'react';
+import {
+    Box,
+    Typography,
+    Paper,
+    TextField,
+    FormControlLabel,
+    Switch,
+    Button,
+    Grid,
+    Divider,
+    Alert,
+    CircularProgress
+} from '@mui/material';
+import ModelTrainingIcon from '@mui/icons-material/ModelTraining';
+import SaveIcon from '@mui/icons-material/Save';
+
+// Configuration Interface
+interface GestureConfig {
+    analysis_fps: number;
+    gesture_min_seconds: number;
+    gesture_max_seconds: number;
+    n_clusters: number | null;
+    use_hdbscan: boolean;
+    dtw_downsample_factor: number;
+}
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
+import { useStore } from '../store/useStore';
+
+export default function TrainingTab() {
+    const [config, setConfig] = useState<GestureConfig | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [training, setTraining] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [successMsg, setSuccessMsg] = useState<string | null>(null);
+    const [trainOutput, setTrainOutput] = useState<string | null>(null);
+
+    const classes = useStore((state) => state.classes);
+
+    // Fetch Config
+    useEffect(() => {
+        fetchConfig();
+    }, []);
+
+    // Sync n_clusters with class count if appropriate
+    useEffect(() => {
+        if (config && !config.use_hdbscan) {
+            // Default to class count if n_clusters is not set, or if we want to enforce it.
+            // We only enforce if current value is null or we are initializing.
+            // But let's respect the user's manual change? 
+            // The prompt says "use the classes from the classlist panel as n_clusters".
+            // I will set it if it is null/0.
+            if (config.n_clusters === null || config.n_clusters === 0) {
+                setConfig(prev => prev ? ({ ...prev, n_clusters: classes.length }) : null);
+            }
+        }
+    }, [config?.use_hdbscan, classes.length]);
+
+    const fetchConfig = async () => {
+        try {
+            setLoading(true);
+            const res = await fetch(`${API_URL}/api/config/gesture`);
+            if (!res.ok) throw new Error("Failed to load configuration");
+            const data = await res.json();
+
+            // If using defaults (hdbscan=false in main.py) and n_clusters is null, use class count
+            if (!data.use_hdbscan && (data.n_clusters === null || data.n_clusters === 0)) {
+                data.n_clusters = classes.length;
+            }
+            setConfig(data);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : String(err));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleInputChange = (field: keyof GestureConfig, value: any) => {
+        if (!config) return;
+        setConfig({
+            ...config,
+            [field]: value
+        });
+    };
+
+    const handleSave = async () => {
+        if (!config) return;
+        try {
+            setSaving(true);
+            setSuccessMsg(null);
+            setError(null);
+
+            const res = await fetch(`${API_URL}/api/config/gesture`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+
+            if (!res.ok) throw new Error("Failed to save configuration");
+
+            setSuccessMsg("Configuration saved successfully!");
+            setTimeout(() => setSuccessMsg(null), 3000);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : String(err));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleRetrain = async () => {
+        try {
+            setTraining(true);
+            setTrainOutput(null);
+            setError(null);
+
+            const res = await fetch(`${API_URL}/api/train/mediapipe`, {
+                method: 'POST'
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || "Training failed");
+            }
+
+            setSuccessMsg("Training completed successfully!");
+            setTrainOutput(data.output || "No output returned.");
+        } catch (err) {
+            setError(err instanceof Error ? err.message : String(err));
+            // Try to recover output if available in error structure? 
+            // Simplified here.
+        } finally {
+            setTraining(false);
+        }
+    };
+
+    if (loading) {
+        return <Box sx={{ p: 4, textAlign: 'center' }}><CircularProgress /></Box>;
+    }
+
+    if (!config) {
+        return <Box sx={{ p: 4, textAlign: 'center' }}><Typography color="error">Could not load configuration.</Typography></Box>;
+    }
+
+    return (
+        <Box sx={{ p: 3, maxWidth: 800, mx: 'auto' }}>
+            <Paper sx={{ p: 4, borderRadius: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                    <ModelTrainingIcon sx={{ fontSize: 40, mr: 2, color: 'primary.main' }} />
+                    <Box>
+                        <Typography variant="h5" fontWeight="bold">Processing Configuration</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            Configure parameters for gesture analysis and clustering
+                        </Typography>
+                    </Box>
+                </Box>
+
+                {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                {successMsg && <Alert severity="success" sx={{ mb: 2 }}>{successMsg}</Alert>}
+
+                <Grid container spacing={3}>
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth
+                            label="Analysis FPS"
+                            type="number"
+                            value={config.analysis_fps}
+                            onChange={(e) => handleInputChange('analysis_fps', Number(e.target.value))}
+                            helperText="Frames per second to analyze (lower = faster)"
+                        />
+                    </Grid>
+
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth
+                            label="DTW Downsample Factor"
+                            type="number"
+                            value={config.dtw_downsample_factor}
+                            onChange={(e) => handleInputChange('dtw_downsample_factor', Number(e.target.value))}
+                            helperText="Reduce temporal resolution for DTW (1 = no downsample)"
+                        />
+                    </Grid>
+
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth
+                            label="Min Gesture Duration (seconds)"
+                            type="number"
+                            value={config.gesture_min_seconds}
+                            onChange={(e) => handleInputChange('gesture_min_seconds', Number(e.target.value))}
+                        />
+                    </Grid>
+
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth
+                            label="Max Gesture Duration (seconds)"
+                            type="number"
+                            value={config.gesture_max_seconds}
+                            onChange={(e) => handleInputChange('gesture_max_seconds', Number(e.target.value))}
+                        />
+                    </Grid>
+
+                    <Grid item xs={12}>
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={config.use_hdbscan}
+                                    onChange={(e) => handleInputChange('use_hdbscan', e.target.checked)}
+                                />
+                            }
+                            label={
+                                <Box>
+                                    <Typography variant="body1">Use HDBSCAN Clustering</Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        Automatically determine number of clusters
+                                    </Typography>
+                                </Box>
+                            }
+                        />
+                    </Grid>
+
+                    <Grid item xs={12}>
+                        <TextField
+                            fullWidth
+                            label="Number of Clusters (Manual)"
+                            type="number"
+                            disabled={config.use_hdbscan}
+                            value={config.n_clusters ?? ''}
+                            onChange={(e) => handleInputChange('n_clusters', e.target.value === '' ? null : Number(e.target.value))}
+                            helperText={config.use_hdbscan ? "Disabled when using HDBSCAN" : "Specify fixed number of clusters"}
+                            slotProps={{
+                                htmlInput: { placeholder: "Auto" }
+                            }}
+                        />
+                    </Grid>
+                </Grid>
+
+                <Box sx={{ mt: 4, display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+                    <Button
+                        variant="contained"
+                        startIcon={<SaveIcon />}
+                        onClick={handleSave}
+                        disabled={saving}
+                    >
+                        {saving ? 'Saving...' : 'Save Configuration'}
+                    </Button>
+                </Box>
+            </Paper>
+
+            <Paper sx={{ mt: 3, p: 4, borderRadius: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="h6" fontWeight="bold">Pipeline Execution</Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                    Run the full pipeline to extract gestures from videos and re-cluster them using the current configuration.
+                </Typography>
+
+                <Button
+                    variant="contained"
+                    color="secondary"
+                    onClick={handleRetrain}
+                    disabled={training}
+                    fullWidth
+                    size="large"
+                >
+                    {training ? <CircularProgress size={24} color="inherit" sx={{ mr: 1 }} /> : null}
+                    {training ? 'Processing...' : 'Retrain Mediapipe & Cluster'}
+                </Button>
+
+                {trainOutput && (
+                    <Box sx={{ mt: 3, bgcolor: '#f5f5f5', p: 2, borderRadius: 1, maxHeight: 300, overflow: 'auto', fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{trainOutput}</pre>
+                    </Box>
+                )}
+            </Paper>
+        </Box>
+    );
+}

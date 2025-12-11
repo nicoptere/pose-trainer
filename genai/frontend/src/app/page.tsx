@@ -6,6 +6,7 @@ import { Container, Typography, Box, Tabs, Tab } from '@mui/material';
 import ClassManager from '../components/ClassManager';
 import TestTab from '../components/TestTab';
 import MetadataTab from '../components/MetadataTab';
+import TrainingTab from '../components/TrainingTab';
 import { useStore } from '../store/useStore';
 
 interface TabPanelProps {
@@ -68,9 +69,7 @@ export default function Home() {
           <ClassManager />
         </CustomTabPanel>
         <CustomTabPanel value={tabIndex} index={1}>
-          <Box sx={{ p: 4, textAlign: 'center' }}>
-            <Typography variant="h5" color="text.secondary">Training Interface Coming Soon</Typography>
-          </Box>
+          <TrainingTab />
         </CustomTabPanel>
         <CustomTabPanel value={tabIndex} index={2}>
           <TestTab />

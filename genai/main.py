@@ -175,6 +175,79 @@ def upload_files():
         app.logger.error(f"Upload error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/config/gesture', methods=['GET'])
+def get_gesture_config():
+    try:
+        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'gesture_config.json')
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+            return jsonify(config), 200
+        else:
+            # Default config if file doesn't exist
+            return jsonify({
+                "analysis_fps": 12,
+                "gesture_min_seconds": 2,
+                "gesture_max_seconds": 6,
+                "n_clusters": None,
+                "use_hdbscan": False,
+                "dtw_downsample_factor": 1
+            }), 200
+    except Exception as e:
+        app.logger.error(f"Get config error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/config/gesture', methods=['POST'])
+def update_gesture_config():
+    try:
+        data = request.json
+        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'gesture_config.json')
+        
+        # Validate keys (optional but good practice)
+        base_keys = ["analysis_fps", "gesture_min_seconds", "gesture_max_seconds", "n_clusters", "use_hdbscan", "dtw_downsample_factor"]
+        
+        # Read existing or default to preserve other keys if any? 
+        # For now, just rewrite the file with provided data + defaults if missing
+        
+        with open(config_path, 'w') as f:
+            json.dump(data, f, indent=4)
+            
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        app.logger.error(f"Update config error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/train/mediapipe', methods=['POST'])
+def train_mediapipe():
+    try:
+        # Trigger run.py
+        # We use subprocess to run it asynchronously or synchronously? 
+        # User might want to see output. For now, let's run it and return success if it starts.
+        # But `run.py` might take a while.
+        # A simple polling or blocking implementation:
+        
+        import subprocess
+        root_dir = os.path.dirname(os.path.dirname(__file__))
+        script_path = os.path.join(root_dir, 'run.py')
+        
+        # Run in a separate process? Or block?
+        # Blocking for now as it might be safer to ensure it completes, 
+        # but typically we'd want a job queue. 
+        # Given this is a local tool, blocking with a timeout or just letting it run is common.
+        # However, run.py prints to stdout.
+        
+        # Let's run it and capture output
+        result = subprocess.run([sys.executable, script_path], capture_output=True, text=True, cwd=root_dir)
+        
+        if result.returncode == 0:
+            return jsonify({'success': True, 'output': result.stdout}), 200
+        else:
+            return jsonify({'error': 'Training failed', 'details': result.stderr, 'output': result.stdout}), 500
+            
+    except Exception as e:
+        app.logger.error(f"Training error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     # Run locally
     port = int(os.environ.get('PORT', 8080))
