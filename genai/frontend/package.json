@@ -25,6 +25,7 @@
     "react-dom": "19.2.0",
     "react-webcam": "^7.2.0",
     "sentry-testkit": "^6.2.2",
+    "u": "^0.1.0",
     "zustand": "^5.0.9"
   },
   "devDependencies": {

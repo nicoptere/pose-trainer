@@ -3,7 +3,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Box, Typography, Paper, LinearProgress, Alert, Card, CardContent } from '@mui/material';
 import Webcam from 'react-webcam';
-import * as ort from 'onnxruntime-web';
+
+
+import type * as ort from 'onnxruntime-web';
+// import { Pose, Results } from '@mediapipe/pose'; // Removed static import
 // Configuration
 const SEQUENCE_LENGTH = 30;
 const INPUT_SIZE = 132;
@@ -105,61 +108,23 @@ export default function TestTab() {
                 const labelsData = await labelsRes.json();
                 setLabels(labelsData.class_names);
 
-                // 2. Load ONNX Model
-                // Point to our backend proxy endpoint
-                // We typically use fetch to get blob or arraybuffer if ONNX Runtime Web doesn't support relative URL to backend easily without CORS if separate domain
-                // But here same origin or proxy. 
-                // ort.InferenceSession.create can take a URL.
-                const modelUrl = `${API_URL}/api/model/onnx`;
+                // 2. Load MediaPipe Pose from NPM
 
-                // Configure ORT
-                // Try using wasm backend
-                ort.env.wasm.numThreads = 1;
-                ort.env.wasm.simd = true;
-
-                // Attempt to Create Session
-                try {
-                    const session = await ort.InferenceSession.create(modelUrl, {
-                        executionProviders: ['wasm', 'webgl']
-                    });
-                    sessionRef.current = session;
-                    console.log("ONNX Session created");
-                } catch (e: any) {
-                    console.error("ONNX Load Error", e);
-                    // Fallback to fetch bytes
-                    console.log("Falling back to arrayBuffer load");
-                    const modelBytes = await fetch(modelUrl).then(r => r.arrayBuffer());
-                    const session = await ort.InferenceSession.create(modelBytes);
-                    sessionRef.current = session;
+                // CRITICAL: Clean up global Module from ONNX Runtime if it leaked
+                if ((window as any).Module) {
+                    console.log("Cleaning up global Module before MediaPipe load");
+                    (window as any).Module = undefined;
                 }
 
-                // 3. Load MediaPipe Pose from CDN dynamically
-                // We can't use 'import' because module resolution fails.
-                // We'll insert a script tag and wait for it to load.
-                // Or better, use dynamic import() if ES modules supported, but for MP it's often easier to just load the classes.
-                // Actually the @mediapipe/pose package is just a wrapper around the JS file.
-                // The issue is Next.js failing to bundle it.
-                // We will use the CDN version directly.
+                // Dynamic import to load the script from NPM package
+                const mpPose = await import('@mediapipe/pose');
 
-                // Check if Pose is already available on window
-                if (!(window as any).Pose) {
-                    await new Promise<void>((resolve, reject) => {
-                        const script = document.createElement('script');
-                        script.src = "https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js";
-                        script.async = true;
-                        script.crossOrigin = "anonymous";
-                        script.onload = () => resolve();
-                        script.onerror = () => reject(new Error("Failed to load MediaPipe Pose script"));
-                        document.body.appendChild(script);
-                    });
-                }
-
-                const PoseKlass = (window as any).Pose;
-                if (!PoseKlass) throw new Error("MediaPipe Pose class not found after script load");
+                const PoseKlass = mpPose.Pose;
+                if (!PoseKlass) throw new Error("MediaPipe Pose class not found after dynamic import");
 
                 const pose = new PoseKlass({
                     locateFile: (file: string) => {
-                        return `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`;
+                        return `/mediapipe/pose/${file}`;
                     }
                 });
 
@@ -174,12 +139,41 @@ export default function TestTab() {
                 pose.onResults(onPoseResults);
                 poseRef.current = pose;
 
+
+                // 3. Load ONNX Model AFTER MediaPipe
+                // Import ONNX Runtime dynamically to avoid global scope pollution before MP loads
+                const ort = await import('onnxruntime-web');
+
+                const modelUrl = `${API_URL}/api/model/onnx`;
+
+                // Configure ORT
+                // Check if env exists (it might be on the module or global depending on version, but usually module export)
+                if (ort.env && ort.env.wasm) {
+                    ort.env.wasm.numThreads = 1;
+                    ort.env.wasm.simd = true;
+                }
+
+                try {
+                    // Use WASM only to prevent WebGL context conflicts with MediaPipe
+                    const session = await ort.InferenceSession.create(modelUrl, {
+                        executionProviders: ['wasm']
+                    });
+                    sessionRef.current = session;
+                    console.log("ONNX Session created");
+                } catch (e: any) {
+                    console.error("ONNX Load Error", e);
+                    console.log("Falling back to arrayBuffer load");
+                    const modelBytes = await fetch(modelUrl).then(r => r.arrayBuffer());
+                    const session = await ort.InferenceSession.create(modelBytes);
+                    sessionRef.current = session;
+                }
+
                 setModelLoading(false);
                 startPredictionLoop();
 
             } catch (err: any) {
                 console.error("Setup error:", err);
-                setModelError(err.message || "Failed to load model resources. make sure you have trained a model.");
+                setModelError(err.message || "Failed to load model resources.");
                 setModelLoading(false);
             }
         };
@@ -195,15 +189,36 @@ export default function TestTab() {
 
     // Frame Loop
     const startPredictionLoop = useCallback(() => {
+        const offscreenCanvas = document.createElement('canvas'); // Reuse this if possible, but for now create here or ref?
+        // Better to use a ref for the canvas to avoid creating it every frame
+
         const loop = async () => {
             if (
                 webcamRef.current &&
                 webcamRef.current.video &&
                 webcamRef.current.video.readyState === 4 &&
+                webcamRef.current.video.videoWidth > 0 &&
+                webcamRef.current.video.videoHeight > 0 &&
                 poseRef.current
             ) {
                 const video = webcamRef.current.video;
-                await poseRef.current.send({ image: video });
+
+                // Draw to intermediate canvas to strip obscure WebGL conflicts or dirty video states
+                if (offscreenCanvas.width !== video.videoWidth) {
+                    offscreenCanvas.width = video.videoWidth;
+                    offscreenCanvas.height = video.videoHeight;
+                }
+                const ctx = offscreenCanvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+
+                    try {
+                        // Pass the canvas element instead of video or bitmap
+                        await poseRef.current.send({ image: offscreenCanvas });
+                    } catch (e) {
+                        console.error("Pose Send Error:", e);
+                    }
+                }
             }
             requestRef.current = requestAnimationFrame(loop);
         };
@@ -296,6 +311,8 @@ export default function TestTab() {
                 data.set(poseBufferRef.current[i], i * INPUT_SIZE);
             }
 
+            // Dynamic ort import needed for Tensor constructor if not globally available
+            const ort = await import('onnxruntime-web');
             const tensor = new ort.Tensor('float32', data, [1, SEQUENCE_LENGTH, INPUT_SIZE]);
             const feeds = { input: tensor };
 
