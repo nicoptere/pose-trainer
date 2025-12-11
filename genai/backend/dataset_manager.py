@@ -3,12 +3,46 @@ import json
 import shutil
 import re
 import traceback
+import io
+import numpy as np
+import base64
+from PIL import Image
 from moviepy.editor import VideoFileClip, vfx
 from moviepy.video.io.ffmpeg_writer import ffmpeg_write_video
 
 def sanitize_filename(name):
     """Sanitize string to be safe for directory/filenames."""
     return re.sub(r'[<>:"/\\|?*]', '_', name).strip()
+
+def generate_thumbnail(video_path):
+    """Generates a base64 JPEG thumbnail from the first frame of a video using MoviePy and PIL."""
+    try:
+        # Use MoviePy to get the first frame
+        with VideoFileClip(video_path) as clip:
+            # get_frame returns a numpy array representing the frame at t=0
+            frame = clip.get_frame(0)
+            
+            # Convert numpy array to PIL Image
+            image = Image.fromarray(frame)
+            
+            # Resize to reasonable thumbnail size
+            target_width = 200
+            w_percent = (target_width / float(image.size[0]))
+            h_size = int((float(image.size[1]) * float(w_percent)))
+            
+            # Use LANCZOS for high quality downsampling
+            image = image.resize((target_width, h_size), Image.Resampling.LANCZOS)
+            
+            # Encode as JPEG to memory buffer
+            buffer = io.BytesIO()
+            image.save(buffer, format="JPEG", quality=70)
+            jpg_as_text = base64.b64encode(buffer.getvalue()).decode('utf-8')
+            
+            return f"data:image/jpeg;base64,{jpg_as_text}"
+            
+    except Exception as e:
+        print(f"Thumbnail generation failed for {video_path}: {e}")
+        return None
 
 def sync_dataset(metadata, dataset_root):
 
@@ -433,11 +467,15 @@ def scan_dataset(dataset_root):
                     vid_obj = existing_videos[rel_path]
                     # Ensure path is correct format for frontend
                     vid_obj['path'] = rel_path # We utilize rel_path, frontend prepends /api/videos/
+                    
+                    if 'thumbnailUrl' not in vid_obj:
+                         vid_obj['thumbnailUrl'] = generate_thumbnail(full_path)
                 else:
                     vid_obj = {
                         'id': rel_path,
                         'name': f,
-                        'path': rel_path
+                        'path': rel_path,
+                        'thumbnailUrl': generate_thumbnail(full_path)
                     }
                     existing_videos[rel_path] = vid_obj
                 

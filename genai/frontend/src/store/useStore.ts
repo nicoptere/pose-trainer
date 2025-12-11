@@ -94,6 +94,7 @@ export const useStore = create<AppState>()(
                     name: vid.name,
                     url: `${API_URL}/api/videos/${vid.path}`,
                     classId: group.id,
+                    thumbnailUrl: vid.thumbnailUrl
                   });
                 }
               });
@@ -132,7 +133,8 @@ export const useStore = create<AppState>()(
                 id: v.id,
                 name: v.name,
                 url: `${API_URL}/api/videos/${v.path}`,
-                classId: cId
+                classId: cId,
+                thumbnailUrl: v.thumbnailUrl
               });
             });
           }
