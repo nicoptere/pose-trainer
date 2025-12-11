@@ -204,7 +204,16 @@ export default function TestTab() {
 
     const startPredictionLoop = useCallback(() => {
         const offscreenCanvas = document.createElement('canvas');
-        const loop = async () => {
+        let lastTime = 0;
+        const FPS = 30;
+        const interval = 1000 / FPS;
+
+        const loop = async (currentTime: number) => {
+            requestRef.current = requestAnimationFrame(loop);
+
+            if (currentTime - lastTime < interval) return;
+            lastTime = currentTime;
+
             if (webcamRef.current?.video?.readyState === 4 && poseRef.current) {
                 const video = webcamRef.current.video;
                 if (offscreenCanvas.width !== video.videoWidth) {
@@ -223,9 +232,8 @@ export default function TestTab() {
                     } catch (e) { }
                 }
             }
-            requestRef.current = requestAnimationFrame(loop);
         };
-        loop();
+        requestRef.current = requestAnimationFrame(loop);
     }, []);
 
     const onPoseResults = (results: any) => {
@@ -261,8 +269,8 @@ export default function TestTab() {
             });
 
             if (onnxWorkerRef.current) {
-                // Remove complex objects (just keys needed)
-                const safeLandmarks = landmarks.map((l: any) => ({ x: l.x, y: l.y, z: l.z, visibility: l.visibility }));
+                // Flipped back to Observer for Model (1-x)
+                const safeLandmarks = landmarks.map((l: any) => ({ x: 1.0 - l.x, y: l.y, z: l.z, visibility: l.visibility }));
                 onnxWorkerRef.current.postMessage({ type: 'process', payload: safeLandmarks });
             }
         }
