@@ -309,6 +309,54 @@ def train_classifier():
         app.logger.error(f"Classifier training error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/model/onnx', methods=['GET'])
+def get_onnx_model():
+    try:
+        # Resolve output path
+        root_dir = os.path.dirname(os.path.dirname(__file__)) # c:\ML\perso\pose-trainer
+        config_path = os.path.join(root_dir, 'gesture_config.json')
+        output_path = 'genai/result'
+        
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                 conf = json.load(f)
+                 output_path = conf.get('output_path', 'genai/result')
+        
+        abs_output_path = output_path if os.path.isabs(output_path) else os.path.join(root_dir, output_path)
+        model_path = os.path.join(abs_output_path, 'gesture_classifier.onnx')
+        
+        if not os.path.exists(model_path):
+            return jsonify({'error': 'Model not found. Please train the model first.'}), 404
+            
+        return send_from_directory(os.path.dirname(model_path), os.path.basename(model_path))
+    except Exception as e:
+        app.logger.error(f"Serve model error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/model/labels', methods=['GET'])
+def get_model_labels():
+    try:
+        # Resolve output path
+        root_dir = os.path.dirname(os.path.dirname(__file__))
+        config_path = os.path.join(root_dir, 'gesture_config.json')
+        output_path = 'genai/result'
+        
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                 conf = json.load(f)
+                 output_path = conf.get('output_path', 'genai/result')
+        
+        abs_output_path = output_path if os.path.isabs(output_path) else os.path.join(root_dir, output_path)
+        labels_path = os.path.join(abs_output_path, 'gesture_classifier_labels.json')
+        
+        if not os.path.exists(labels_path):
+            return jsonify({'error': 'Labels not found. Please train the model first.'}), 404
+            
+        return send_from_directory(os.path.dirname(labels_path), os.path.basename(labels_path))
+    except Exception as e:
+        app.logger.error(f"Serve labels error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     # Run locally
     port = int(os.environ.get('PORT', 8080))
