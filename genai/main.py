@@ -221,27 +221,47 @@ def update_gesture_config():
 def train_mediapipe():
     try:
         # Trigger run.py
-        # We use subprocess to run it asynchronously or synchronously? 
-        # User might want to see output. For now, let's run it and return success if it starts.
-        # But `run.py` might take a while.
-        # A simple polling or blocking implementation:
-        
         import subprocess
-        root_dir = os.path.dirname(os.path.dirname(__file__))
-        script_path = os.path.join(root_dir, 'run.py')
         
-        # Run in a separate process? Or block?
-        # Blocking for now as it might be safer to ensure it completes, 
-        # but typically we'd want a job queue. 
-        # Given this is a local tool, blocking with a timeout or just letting it run is common.
-        # However, run.py prints to stdout.
+        # Paths relative to genai/
+        # Root dir where main.py is: c:\ML\perso\pose-trainer\genai
+        genai_dir = os.path.dirname(__file__) 
         
-        # Let's run it and capture output
-        result = subprocess.run([sys.executable, script_path], capture_output=True, text=True, cwd=root_dir)
+        # run.py is in backend/
+        script_path = os.path.join(genai_dir, 'backend', 'run.py')
+        
+        # We run it with CWD as genai_dir so it can find 'backend' package if needed,
+        # OR we run it with CWD as backend dir?
+        # run.py expects to find 'gestures_config.json' which is in root (../ relative to backend, or ./ relative to root).
+        # And it scans 'dataset/' which is in genai/ dataset/.
+        
+        # Let's set CWD to genai_dir
+        cwd = genai_dir
+        
+        # Force UTF-8 encoding for the subprocess to avoid UnicodeEncodeErrors on Windows
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
+        
+        print(f"Running MediaPipe training: {sys.executable} {script_path}")
+        
+        # Capture both stdout and stderr
+        result = subprocess.run(
+            [sys.executable, script_path], 
+            capture_output=True, 
+            text=True, 
+            cwd=cwd,
+            env=env,
+            encoding='utf-8', # Force reading output as utf-8
+            errors='replace'  # Replace invalid chars if any
+        )
         
         if result.returncode == 0:
             return jsonify({'success': True, 'output': result.stdout}), 200
         else:
+            print(f"Training failed. Return code: {result.returncode}")
+            print(f"STDOUT: {result.stdout}")
+            print(f"STDERR: {result.stderr}")
+            app.logger.error(f"Training failed: {result.stderr}")
             return jsonify({'error': 'Training failed', 'details': result.stderr, 'output': result.stdout}), 500
             
     except Exception as e:

@@ -17,14 +17,17 @@ import os
 import sys
 import json
 import numpy as np
-import cv2
 import mediapipe as mp
 from pathlib import Path
 from typing import List, Dict, Tuple
 from tqdm import tqdm
 
+# Replace cv2 with moviepy and PIL
+from moviepy.editor import VideoFileClip
+from PIL import Image
+
 # Add scripts directory to path (if needed later)
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'scripts'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'training'))
 
 import config
 
@@ -34,13 +37,6 @@ import config
 
 def load_config():
     """Load configuration from gesture_config.json or use defaults."""
-    # Look for config in parent directory (root of project relative to this script?)
-    # Assuming this script is in genai/backend/run.py
-    # and config is in root (c:\ML\perso\pose-trainer\gesture_config.json)
-    
-    # Actually, let's look relative to CWD first or standard locations
-    # But usually passed via CWD of main execution
-    
     config_path = 'gesture_config.json'
     if not os.path.exists(config_path):
         # Try one level up
@@ -52,7 +48,7 @@ def load_config():
         'gesture_min_seconds': 2,
         'gesture_max_seconds': 6,
         'n_clusters': None,
-        'use_hdbscan': False, # Not used here really
+        'use_hdbscan': False, 
         'dtw_downsample_factor': 1
     }
     
@@ -61,9 +57,9 @@ def load_config():
             with open(config_path, 'r') as f:
                 user_config = json.load(f)
                 defaults.update(user_config)
-                print(f"✅ Loaded configuration from {config_path}")
+                print(f"[OK] Loaded configuration from {config_path}")
         except Exception as e:
-            print(f"⚠️  Warning: Could not load {config_path}: {e}")
+            print(f"[WARN] Warning: Could not load {config_path}: {e}")
     
     return defaults
 
@@ -113,35 +109,34 @@ class VideoProcessor:
         )
     
     def extract_pose_sequence(self, video_path: str) -> Tuple[np.ndarray, int]:
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
+        try:
+            clip = VideoFileClip(video_path)
+        except Exception as e:
+            print(f"Error opening video {video_path}: {e}")
             return np.zeros((0, config.INPUT_SIZE)), 0
             
-        original_fps = int(cap.get(cv2.CAP_PROP_FPS))
-        frame_skip = max(1, original_fps // self.target_fps)
+        original_fps = int(clip.fps)
+        
+        # Calculate step in seconds to match target_fps
+        # iterating iter_frames(fps=target_fps) is easiest
         
         landmarks_list = []
-        frame_idx = 0
         
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret: break
-            
-            if frame_idx % frame_skip == 0:
-                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                results = self.pose.process(image)
-                
-                if results.pose_landmarks:
-                    row = []
-                    for lm in results.pose_landmarks.landmark:
-                        row.extend([lm.x, lm.y, lm.z, lm.visibility])
-                    landmarks_list.append(normalize_skeleton(np.array(row)).tolist())
-                else:
-                    landmarks_list.append([0.0] * config.INPUT_SIZE)
-            
-            frame_idx += 1
-            
-        cap.release()
+        # We iterate at target_fps directly
+        for frame in clip.iter_frames(fps=self.target_fps, dtype='uint8'):
+             # Frame is already numpy array in RGB
+             # MediaPipe expects RGB
+             results = self.pose.process(frame)
+             
+             if results.pose_landmarks:
+                 row = []
+                 for lm in results.pose_landmarks.landmark:
+                     row.extend([lm.x, lm.y, lm.z, lm.visibility])
+                 landmarks_list.append(normalize_skeleton(np.array(row)).tolist())
+             else:
+                 landmarks_list.append([0.0] * config.INPUT_SIZE)
+        
+        clip.close()
         return np.array(landmarks_list), original_fps
         
     def close(self):
@@ -180,9 +175,6 @@ def main():
     manifest_clusters = {}
     total_gestures = 0
     
-    # Determine absolute output path
-    # If we are in genai/, we want output/ to be in root
-    # assuming we are running this script from genai/ (cwd)
     root_output_dir = os.path.join(os.path.dirname(os.getcwd()) if 'genai' in os.getcwd() else os.getcwd(), 'output')
     clusters_output_dir = os.path.join(root_output_dir, 'clusters')
     os.makedirs(clusters_output_dir, exist_ok=True)
@@ -202,7 +194,7 @@ def main():
         
         cluster_gestures = []
         
-        for video_file in tqdm(video_files, desc=f"  Class {class_name}"):
+        for video_file in tqdm(video_files, desc=f"  Class {class_name}", ascii=True):
             video_path = os.path.join(class_dir, video_file)
             
             # Extract landmarks (treating whole video as gesture)
@@ -215,16 +207,6 @@ def main():
             duration_frames = len(sequence) # in analysis fps
             duration_seconds = duration_frames / ANALYSIS_FPS
             
-            # We must provide 'start_frame', 'end_frame', 'source_video' etc.
-            # Start/End are abstract here since it's the whole file.
-            # But let's verify if we need to map back to original frames?
-            # classification.py loads using load_gesture_sequence which uses start/end frame.
-            # If we say start=0, end=total_frames_in_analysis_fps, 
-            # and load_gesture_sequence converts that to original frames:
-            # original_start = start * frame_skip -> 0
-            # original_end = end * frame_skip -> total_frames
-            # This works.
-            
             gesture_info = {
                 'source_video': os.path.abspath(video_path),
                 'video_name': video_file,
@@ -232,9 +214,6 @@ def main():
                 'end_frame': duration_frames, 
                 'duration_seconds': duration_seconds,
                 'duration_frames': duration_frames,
-                # sequence isn't needed in manifest for classification.py, 
-                # but might be useful if we wanted to avoid re-reading. 
-                # However classification.py re-reads.
             }
             cluster_gestures.append(gesture_info)
             total_gestures += 1
@@ -264,7 +243,7 @@ def main():
     with open(manifest_path, 'w') as f:
         json.dump(manifest, f, indent=2)
         
-    print(f"\n✅ Processing complete!")
+    print(f"\n[OK] Processing complete!")
     print(f"Total Gestures: {total_gestures}")
     print(f"Manifest saved to: {manifest_path}")
     print("\nYou can now run the classifier training.")
