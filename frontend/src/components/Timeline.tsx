@@ -39,8 +39,28 @@ export default function Timeline({ classes, events, startTime, isRunning }: Prop
     }, [isRunning]);
 
     // Derived session duration
-    const sessionDuration = Math.max(0, currentTime - startTime);
-    const containerWidth = Math.max((sessionDuration / 1000) * PIXELS_PER_SECOND + 200, 600); // Expanding width
+    // If stopped, we ensure the duration covers the last event found
+    const lastEventTime = useMemo(() => {
+        if (events.length === 0) return startTime;
+        return events[events.length - 1].timestamp;
+    }, [events, startTime]);
+
+    const effectiveTime = isRunning ? currentTime : Math.max(currentTime, lastEventTime);
+    const sessionDuration = Math.max(1000, effectiveTime - startTime); // Minimum 1s duration
+
+    const containerWidth = isRunning
+        ? Math.max((sessionDuration / 1000) * PIXELS_PER_SECOND + 200, 600)
+        : '100%';
+
+    // Helper to position items
+    const getPosition = (timestamp: number) => {
+        const rel = timestamp - startTime;
+        if (isRunning) {
+            return `${(rel / 1000) * PIXELS_PER_SECOND}px`;
+        } else {
+            return `${(rel / sessionDuration) * 100}%`;
+        }
+    };
 
     // Auto-scroll to right
     useEffect(() => {
@@ -50,9 +70,6 @@ export default function Timeline({ classes, events, startTime, isRunning }: Prop
     }, [currentTime, isRunning, containerWidth]);
 
     // filter classes to those that are relevant (have descriptions or have events)
-    // Actually user said "one track per class". All defined classes?
-    // Let's show all valid classes (excluding Unsorted potentially if needed, but user didn't specify).
-    // Let's show classes that are capable of being detected (have descriptions).
     const activeClasses = useMemo(() => classes.filter(c => c.description && c.description.trim().length > 0), [classes]);
 
     return (
@@ -82,7 +99,7 @@ export default function Timeline({ classes, events, startTime, isRunning }: Prop
                 }}>
                     {activeClasses.map(c => (
                         <Box key={c.id} sx={{ height: TRACK_HEIGHT, px: 1, display: 'flex', alignItems: 'center' }}>
-                            <Typography variant="caption" noWrap sx={{ color: '#ddd', fontSize: '10px' }}>
+                            <Typography variant="caption" noWrap sx={{ color: stringToColor(c.name), fontSize: '10px' }}>
                                 {c.name}
                             </Typography>
                         </Box>
@@ -101,8 +118,6 @@ export default function Timeline({ classes, events, startTime, isRunning }: Prop
                     }}
                 >
                     <Box sx={{ width: containerWidth, position: 'relative', height: '100%', pt: 2 }}>
-                        {/* Time Grid / Markers could go here */}
-
                         {/* Tracks Background Lines */}
                         {activeClasses.map((c, i) => (
                             <Box key={c.id} sx={{
@@ -121,9 +136,9 @@ export default function Timeline({ classes, events, startTime, isRunning }: Prop
                             const classIndex = activeClasses.findIndex(c => c.name === ev.name);
                             if (classIndex === -1) return null;
 
-                            const relativeTime = ev.timestamp - startTime;
-                            const left = (relativeTime / 1000) * PIXELS_PER_SECOND;
+                            const left = getPosition(ev.timestamp);
                             const color = stringToColor(ev.name);
+                            const relativeTime = ev.timestamp - startTime;
 
                             return (
                                 <Box
@@ -133,7 +148,7 @@ export default function Timeline({ classes, events, startTime, isRunning }: Prop
                                         left: left,
                                         top: 16 + (classIndex * TRACK_HEIGHT) + 2, // +2 for vertical centering padding
                                         height: TRACK_HEIGHT - 4,
-                                        width: 10, // Fixed width for instant event? Or 20px
+                                        width: isRunning ? 10 : `max(0.5%, 2px)`, // Scale width
                                         bgcolor: color,
                                         borderRadius: 1,
                                         zIndex: 1,
@@ -150,7 +165,7 @@ export default function Timeline({ classes, events, startTime, isRunning }: Prop
                         {isRunning && (
                             <Box sx={{
                                 position: 'absolute',
-                                left: ((currentTime - startTime) / 1000) * PIXELS_PER_SECOND,
+                                left: getPosition(currentTime),
                                 top: 0,
                                 bottom: 0,
                                 width: 1,
