@@ -18,7 +18,7 @@ export interface VideoClip {
   thumbnailUrl?: string;
   color?: string;
   crop?: { x: number; y: number; width: number; height: number };
-  previewDirty?: boolean;
+  isCommitted?: boolean;
 }
 
 // Extends VideoClip to enforce subclip-specific fields
@@ -58,6 +58,7 @@ interface AppState {
 
   // Sync
   syncDataset: () => Promise<void>;
+  commitFile: () => Promise<void>; // Alias/Wrapper for sync
   uploadFiles: (files: File[]) => Promise<void>;
 }
 
@@ -79,7 +80,7 @@ export const useStore = create<AppState>()(
                 id: group.id,
                 name: group.name,
                 count: group.count,
-                hasAudio: group.hasAudio || false,
+                hasAudio: group.hasAudio !== undefined ? group.hasAudio : true,
                 isDirty: group.isDirty || false,
                 caption: group.caption || '',
                 description: group.description || ''
@@ -99,7 +100,7 @@ export const useStore = create<AppState>()(
                     thumbnailUrl: vid.thumbnailUrl,
                     color: vid.color,
                     crop: vid.crop,
-                    previewDirty: false // Assume clean on load
+                    isCommitted: true // Loaded from backend => Committed
                   });
                 } else {
                   loadedVideos.push({
@@ -107,7 +108,8 @@ export const useStore = create<AppState>()(
                     name: vid.name,
                     url: `${API_URL}/api/videos/${vid.path}`,
                     classId: group.id,
-                    thumbnailUrl: vid.thumbnailUrl
+                    thumbnailUrl: vid.thumbnailUrl,
+                    isCommitted: true // Loaded from backend => Committed
                   });
                 }
               });
@@ -121,7 +123,7 @@ export const useStore = create<AppState>()(
                 id: c.id,
                 name: c.name,
                 count: 0,
-                hasAudio: c.hasAudio || false,
+                hasAudio: c.hasAudio !== undefined ? c.hasAudio : true,
                 isDirty: c.isDirty || false,
                 caption: c.caption || '',
                 description: c.description || ''
@@ -139,7 +141,8 @@ export const useStore = create<AppState>()(
                     endTime: sc.endTime,
                     thumbnailUrl: sc.thumbnailUrl,
                     color: sc.color,
-                    crop: sc.crop
+                    crop: sc.crop,
+                    isCommitted: true
                   });
                 });
               }
@@ -155,7 +158,8 @@ export const useStore = create<AppState>()(
                 name: v.name,
                 url: `${API_URL}/api/videos/${v.path}`,
                 classId: cId,
-                thumbnailUrl: v.thumbnailUrl
+                thumbnailUrl: v.thumbnailUrl,
+                isCommitted: true
               });
             });
           }
@@ -202,7 +206,7 @@ export const useStore = create<AppState>()(
                 id: data.name,
                 name: data.name,
                 count: 0,
-                hasAudio: false,
+                hasAudio: true,
                 isDirty: false,
                 caption: ''
               }]
@@ -224,7 +228,8 @@ export const useStore = create<AppState>()(
             name,
             url,
             blob,
-            classId: 'Unsorted'
+            classId: 'Unsorted',
+            isCommitted: false
           }]
         }));
       },
@@ -241,7 +246,7 @@ export const useStore = create<AppState>()(
         if (video.parentVideoId) {
           return {
             videos: state.videos.map(v =>
-              v.id === videoId ? { ...v, classId: targetClassId } : v
+              v.id === videoId ? { ...v, classId: targetClassId, isCommitted: false } : v
             )
           };
         }
@@ -259,7 +264,8 @@ export const useStore = create<AppState>()(
             startTime: 0,
             endTime: undefined, // Indicates full length
             thumbnailUrl: video.thumbnailUrl,
-            color: video.color || '#666'
+            color: video.color || '#666',
+            isCommitted: false
           };
           // Keep the original video in Unsorted, add the new clip to the target class
           return {
@@ -290,14 +296,15 @@ export const useStore = create<AppState>()(
           endTime: end,
           thumbnailUrl: thumbnail,
           color: color,
-          crop: crop
+          crop: crop,
+          isCommitted: false
         };
         set((state) => ({ videos: [...state.videos, newClip] }));
         return id;
       },
 
       updateVideo: (id, updates) => set((state) => ({
-        videos: state.videos.map(v => v.id === id ? { ...v, ...updates } : v)
+        videos: state.videos.map(v => v.id === id ? { ...v, ...updates, isCommitted: false } : v)
       })),
 
       updateClass: (id, updates) => set((state) => ({
@@ -317,7 +324,7 @@ export const useStore = create<AppState>()(
               classes: state.classes.filter(c => c.id !== id),
               // Unassign all videos from this class to Unsorted
               videos: state.videos.map(v =>
-                v.classId === id ? { ...v, classId: 'Unsorted' } : v
+                v.classId === id ? { ...v, classId: 'Unsorted', isCommitted: false } : v
               )
             }));
           }
@@ -348,6 +355,10 @@ export const useStore = create<AppState>()(
         }
       },
 
+      commitFile: async () => {
+        await get().syncDataset();
+      },
+
       syncDataset: async () => {
         const state = get();
 
@@ -372,6 +383,7 @@ export const useStore = create<AppState>()(
             id: c.id,
             name: c.name,
             description: c.description,
+            hasAudio: c.hasAudio,
             subclips: subclips
           };
         });
@@ -411,12 +423,18 @@ export const useStore = create<AppState>()(
           const result = await res.json();
           if (!res.ok) throw new Error(result.error || 'Sync failed');
 
+          // Mark all as committed available in current state
+          set((s) => ({
+            videos: s.videos.map(v => ({ ...v, isCommitted: true }))
+          }));
+
           // Optionally reload to confirm Sync or just alert success?
-          let msg = `Sync Complete!\nCreated: ${result.stats?.created}\nDeleted: ${result.stats?.deleted}\nSkipped: ${result.stats?.skipped}\nErrors: ${result.stats?.errors}`;
-          if (result.stats?.error_messages && result.stats.error_messages.length > 0) {
-            msg += `\n\nError Details:\n${result.stats.error_messages.join('\n')}`;
-          }
-          alert(msg);
+          // let msg = `Sync Complete!\nCreated: ${result.stats?.created}\nDeleted: ${result.stats?.deleted}\nSkipped: ${result.stats?.skipped}\nErrors: ${result.stats?.errors}`;
+          // if (result.stats?.error_messages && result.stats.error_messages.length > 0) {
+          //   msg += `\n\nError Details:\n${result.stats.error_messages.join('\n')}`;
+          // }
+          // alert(msg);
+          console.log("Sync/Commit successful");
 
         } catch (err) {
           console.error("Sync failed", err);
@@ -428,10 +446,9 @@ export const useStore = create<AppState>()(
     {
       name: 'gesture-lab-storage',
       partialize: (state) => ({
-        // Persist all videos, including subclips (which have parentVideoId)
+        classes: state.classes, // Persist classes
         videos: state.videos.map(v => ({
           id: v.id,
-          // We need to persist standard metadata for subclips too
           classId: v.classId,
           parentVideoId: v.parentVideoId,
           startTime: v.startTime,
@@ -440,27 +457,13 @@ export const useStore = create<AppState>()(
           color: v.color,
           crop: v.crop,
           name: v.name,
-          previewDirty: v.previewDirty
+          isCommitted: v.isCommitted
         }))
       }),
       merge: (persistedState: any, currentState) => {
-        // We need to merge loaded files from API with persisted subclips from localStorage
-        // API provides the "real" files. LocalStorage provides the Subclips and the "classId" for real files (if moved).
-
-        // This logic is tricky. Simplified approach:
-        // 1. Recover subclips from LS.
-        // 2. Recover classId overrides for real files from LS.
-        // 3. videos list is mixture of API videos (fresh) + LS subclips.
-
-        // Since we don't have full logic here, we rely on `fetchDataset` to populate real videos, 
-        // and we just blindly accept persisted subclips?
-        // A better approach in `fetchDataset`:
-
         return {
           ...currentState,
-          // We don't restore videos here, we let fetchDataset do it, BUT we need a way to pass persisted data to it.
-          // Actually, `persist` restores state BEFORE `fetchDataset` is called in component.
-          // So `get().videos` in `fetchDataset` has the restored data.
+          classes: persistedState.classes || [],
           videos: persistedState.videos || []
         }
       }

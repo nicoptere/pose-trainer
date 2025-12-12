@@ -8,19 +8,20 @@ const getClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-export const analyzeGestureVideo = async (file: File, gestureName: string): Promise<string> => {
+export const analyzeGestureVideo = async (file: File, gestureName: string, hasAudio: boolean = false): Promise<string> => {
   const ai = getClient();
   const videoPart = await fileToGenerativePart(file);
 
   const prompt = `
     I am training a system to recognize hand gestures. 
     The name of this gesture is "${gestureName}".
-    Please analyze the video and provide a concise but highly distinctive visual description of this gesture. 
+    Please analyze the video${hasAudio ? ' AND the audio track' : ''} and provide a concise but highly distinctive description of this gesture. 
     Focus on:
     1. The initial position of the hand/body.
     2. The motion trajectory.
     3. The final position.
     4. Key features that distinguish it from other common gestures.
+    ${hasAudio ? '5. Distinctive sounds (e.g. claps, snaps, speech) that are essential to the gesture.' : ''}
     
     Output ONLY the description paragraph. Do not include introductory text.
   `;

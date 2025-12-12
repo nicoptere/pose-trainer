@@ -40,9 +40,7 @@ interface DetectedGesture {
 }
 
 export default function EvaluateTab() {
-    const { classes, videos, updateClass, syncDataset } = useStore();
-    const [activeMode, setActiveMode] = useState<'setup' | 'live'>('setup');
-    const [trainingStatus, setTrainingStatus] = useState<Record<string, 'idle' | 'loading' | 'success' | 'error'>>({});
+    const { classes } = useStore();
 
     // -- Live Recognition State --
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -58,43 +56,6 @@ export default function EvaluateTab() {
     const audioContextRef = useRef<AudioContext | null>(null);
     const processorRef = useRef<ScriptProcessorNode | null>(null);
     const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-
-    // --- Training Logic ---
-    const handleTrainClass = async (cls: GestureClass) => {
-        setTrainingStatus(prev => ({ ...prev, [cls.id]: 'loading' }));
-
-        try {
-            // Find a subclip for this class
-            const subclip = videos.find(v => v.classId === cls.id && v.parentVideoId);
-
-            if (!subclip) {
-                alert(`No subclips found for class ${cls.name}. Please create a subclip in the Dataset tab first.`);
-                setTrainingStatus(prev => ({ ...prev, [cls.id]: 'error' }));
-                return;
-            }
-
-            // Fetch video blob
-            const response = await fetch(subclip.url);
-            if (!response.ok) throw new Error('Failed to download video subclip');
-            const blob = await response.blob();
-            const file = new File([blob], `${cls.name}.mp4`, { type: blob.type });
-
-            // Generate Description
-            const description = await analyzeGestureVideo(file, cls.name);
-
-            // Update Store
-            updateClass(cls.id, { description, isDirty: true });
-
-            // Sync (optional, but good practice)
-            // await syncDataset(); // Maybe let user sync manually or auto-sync? Let's just update local.
-
-            setTrainingStatus(prev => ({ ...prev, [cls.id]: 'success' }));
-        } catch (e: any) {
-            console.error(e);
-            alert(`Training failed: ${e.message}`);
-            setTrainingStatus(prev => ({ ...prev, [cls.id]: 'error' }));
-        }
-    };
 
     const addLog = (msg: string) => {
         setDebugLog(prev => [msg, ...prev].slice(0, 20));
@@ -235,7 +196,8 @@ export default function EvaluateTab() {
         if (sourceRef.current) { try { sourceRef.current.disconnect(); } catch (e) { } sourceRef.current = null; }
         if (processorRef.current) { try { processorRef.current.disconnect(); } catch (e) { } processorRef.current = null; }
         if (audioContextRef.current) { try { audioContextRef.current.close(); } catch (e) { } audioContextRef.current = null; }
-        if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+        // Do NOT stop the video streamRef here, so camera stays on when session stops.
+        // if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
 
         if (sessionRef.current) {
             sessionRef.current.then((s: any) => {
@@ -244,99 +206,48 @@ export default function EvaluateTab() {
             sessionRef.current = null;
         }
         setIsConnected(false);
-        addLog("Stopped.");
+        addLog("Session Stopped.");
     };
 
+    // Start Camera on Mount
     useEffect(() => {
-        return () => { stopLiveSession(); };
+        const initCamera = async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 640, height: 480 },
+                    audio: true
+                });
+                streamRef.current = stream;
+
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    // videoRef.current.play(); // autoPlay is on the element
+                }
+            } catch (e: any) {
+                addLog("Camera access failed: " + e.message);
+            }
+        };
+        initCamera();
+
+        return () => {
+            // Cleanup stream on unmount
+            if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); }
+            stopLiveSession();
+        };
     }, []);
-
-
-    // --- Render ---
-
-    if (activeMode === 'setup') {
-        return (
-            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 2, p: 2 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="h5">Evaluation Setup</Typography>
-                    <Button
-                        variant="contained"
-                        color="primary"
-                        startIcon={<VideoCameraFront />}
-                        onClick={() => {
-                            setActiveMode('live');
-                            setTimeout(async () => {
-                                // Start camera
-                                const stream = await navigator.mediaDevices.getUserMedia({
-                                    video: { width: 640, height: 480 },
-                                    audio: true
-                                });
-                                if (videoRef.current) {
-                                    videoRef.current.srcObject = stream;
-                                    videoRef.current.play();
-                                }
-                                streamRef.current = stream;
-                                launchGemini();
-                            }, 100);
-                        }}
-                        disabled={classes.filter(c => c.description).length === 0}
-                    >
-                        Start Live Recognition
-                    </Button>
-                </Box>
-
-                <Alert severity="info">
-                    Train your classes below to generate gesture descriptions for the AI model.
-                </Alert>
-
-                <Grid container spacing={2}>
-                    {classes.map(cls => (
-                        <Grid item xs={12} md={6} lg={4} key={cls.id}>
-                            <Card variant="outlined">
-                                <CardContent>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                        <Typography variant="h6">{cls.name}</Typography>
-                                        {cls.description ? (
-                                            <Chip icon={<CheckCircle />} label="Ready" color="success" size="small" />
-                                        ) : (
-                                            <Chip icon={<ErrorOutline />} label="Untrained" color="warning" size="small" />
-                                        )}
-                                    </Box>
-                                    <Typography variant="body2" color="text.secondary" sx={{
-                                        display: '-webkit-box',
-                                        WebkitLineClamp: 3,
-                                        WebkitBoxOrient: 'vertical',
-                                        overflow: 'hidden',
-                                        height: '4.5em'
-                                    }}>
-                                        {cls.description || "No description generated yet."}
-                                    </Typography>
-                                </CardContent>
-                                <CardActions>
-                                    <Button
-                                        size="small"
-                                        startIcon={trainingStatus[cls.id] === 'loading' ? <CircularProgress size={16} /> : <ModelTraining />}
-                                        onClick={() => handleTrainClass(cls)}
-                                        disabled={trainingStatus[cls.id] === 'loading'}
-                                    >
-                                        {cls.description ? "Retrain" : "Train Model"}
-                                    </Button>
-                                </CardActions>
-                            </Card>
-                        </Grid>
-                    ))}
-                </Grid>
-            </Box>
-        );
-    }
 
     return (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 2, p: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Button startIcon={<ArrowBack />} onClick={() => { stopLiveSession(); setActiveMode('setup'); }}>
-                    Back
-                </Button>
-                <Typography variant="h6">Live Recognition</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                {!isConnected ? (
+                    <Button variant="contained" color="primary" onClick={launchGemini}>
+                        Connect AI
+                    </Button>
+                ) : (
+                    <Button variant="contained" color="error" onClick={stopLiveSession}>
+                        Disconnect
+                    </Button>
+                )}
                 <Chip
                     label={isConnected ? "CONNECTED" : "OFFLINE"}
                     color={isConnected ? "success" : "default"}
@@ -350,13 +261,12 @@ export default function EvaluateTab() {
                     <video
                         ref={videoRef}
                         autoPlay
-                        muted
+                        controls
                         playsInline
                         style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                     />
                     <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-                    {/* Overlay for detections */}
                     {detectedGesture && (Date.now() - detectedGesture.timestamp < 3000) && (
                         <Box sx={{
                             position: 'absolute',
@@ -386,18 +296,6 @@ export default function EvaluateTab() {
                             </ListItem>
                         ))}
                     </List>
-
-                    <Box sx={{ mt: 2 }}>
-                        {!isConnected ? (
-                            <Button variant="contained" color="success" fullWidth onClick={launchGemini}>
-                                Reconnect
-                            </Button>
-                        ) : (
-                            <Button variant="contained" color="error" fullWidth onClick={stopLiveSession}>
-                                Stop Session
-                            </Button>
-                        )}
-                    </Box>
                 </Paper>
             </Box>
         </Box>

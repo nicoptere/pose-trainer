@@ -129,6 +129,9 @@ def sync_dataset(metadata, dataset_root):
         'sourceVideos': disk_source_videos
     }
 
+    # Ensure descriptions are preserved if we merge with disk scan later
+    # (Actually, we generally trust the frontend metadata for class properties like description)
+
     try:
         metadata_path = os.path.join(dataset_root, 'metadata.json')
         with open(metadata_path, 'w', encoding='utf-8') as f:
@@ -505,6 +508,7 @@ def scan_dataset(dataset_root):
             existing_classes[c_name] = {
                 'id': c_name,
                 'name': c_name,
+                'description': '', # Initialize description
                 'subclips': []
             }
             
@@ -555,6 +559,8 @@ def scan_dataset(dataset_root):
         response_groups.append({
             'id': c_id,
             'name': c['name'],
+            'description': c.get('description', ''),
+            'caption': c.get('caption', ''),
             'count': len(c_videos),
             'videos': c_videos
         })

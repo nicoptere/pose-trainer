@@ -55,6 +55,9 @@ export default function ClassManager() {
         if (over && rawActiveId !== over.id) {
             moveVideo(rawActiveId, over.id as string);
 
+            // Auto-commit removed as per user request (manual commit via Upload button)
+            // useStore.getState().commitFile();
+
             // Interrupt edition if dragged from editor
             if (isFromEditor) {
                 setIsEditing(false);
@@ -226,6 +229,7 @@ export default function ClassManager() {
                                         name={video.name}
                                         width="100%"
                                         color={video.color}
+                                        isCommitted={video.isCommitted}
                                         onClick={() => setPreviewUrl(video.url)}
                                         onDelete={() => setConfirmDeleteVideoId(video.id)}
                                     />
@@ -344,11 +348,26 @@ export default function ClassManager() {
                                     }}
                                     onDelete={classId !== 'Unsorted' ? deleteClass : undefined}
                                     onUpdate={updateClass}
+                                    onCommit={async () => {
+                                        setIsSyncing(true);
+                                        await useStore.getState().commitFile();
+                                        setIsSyncing(false);
+                                    }}
+                                    hasUncommitted={classVideos.some(v => v.isCommitted === false)}
                                     onCompute={async (id) => {
                                         console.log(`Retraining class ${id}...`);
+                                        setIsSyncing(true);
+
+                                        // Check removed as button is disabled if uncommitted
+                                        // const uncommitted = classVideos.some(v => v.isCommitted === false);
+                                        // if (uncommitted) {
+                                        //    ...
+                                        // }
+
                                         const subclip = classVideos.find(v => v.parentVideoId);
                                         if (!subclip) {
                                             alert("No subclips found to train on.");
+                                            setIsSyncing(false);
                                             return;
                                         }
 
@@ -363,14 +382,19 @@ export default function ClassManager() {
 
                                             // Import dynamically to avoid SSR issues if any, though standard import is fine
                                             const { analyzeGestureVideo } = await import('../services/geminiService');
-                                            const description = await analyzeGestureVideo(file, realClass?.name || 'gesture');
+                                            const description = await analyzeGestureVideo(file, realClass?.name || 'gesture', realClass?.hasAudio);
 
                                             // Update Store
                                             updateClass(id, { description, isDirty: true });
-                                            console.log("Training complete for", id);
+
+                                            // Auto-Commit Metadata
+                                            await useStore.getState().syncDataset();
+                                            console.log("Training & Sync complete for", id);
                                         } catch (e) {
                                             console.error("Training failed", e);
                                             alert("Training failed: " + e);
+                                        } finally {
+                                            setIsSyncing(false);
                                         }
                                     }}
                                 >
@@ -384,6 +408,7 @@ export default function ClassManager() {
                                             width={80} // Fixed width for class list items
                                             color={video.color}
                                             startTime={video.startTime}
+                                            isCommitted={video.isCommitted}
                                             onClick={() => {
                                                 if (video.parentVideoId) {
                                                     setIsEditing(true);
@@ -420,6 +445,7 @@ export default function ClassManager() {
                         name={activeVideo.name}
                         width={80}
                         color={activeVideo.color}
+                        isCommitted={activeVideo.isCommitted}
                     />
                 ) : null}
             </DragOverlay>

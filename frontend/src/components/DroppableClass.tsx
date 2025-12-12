@@ -4,7 +4,7 @@
 import React from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { IconButton, Paper, Typography, Box, Switch, TextField, Button, Tooltip, Badge } from '@mui/material';
-import { Delete, VolumeUp, VolumeOff, Psychology, Refresh } from '@mui/icons-material';
+import { Delete, VolumeUp, VolumeOff, Psychology, Refresh, CloudUpload } from '@mui/icons-material';
 import { GestureClass } from '../store/useStore';
 
 interface Props {
@@ -14,10 +14,12 @@ interface Props {
     onDelete?: (id: string) => void | Promise<void>;
     onUpdate?: (id: string, updates: Partial<GestureClass>) => void;
     onCompute?: (id: string) => void;
+    onCommit?: (id: string) => void;
+    hasUncommitted?: boolean;
     columns?: number;
 }
 
-export function DroppableClass({ id, classData, children, onDelete, onUpdate, onCompute, columns }: Props) {
+export function DroppableClass({ id, classData, children, onDelete, onUpdate, onCompute, onCommit, hasUncommitted, columns }: Props) {
     const { isOver, setNodeRef } = useDroppable({
         id: id,
     });
@@ -124,15 +126,35 @@ export function DroppableClass({ id, classData, children, onDelete, onUpdate, on
                             </Tooltip>
                         )}
 
+                        {onCommit && (
+                            <Tooltip title={hasUncommitted ? "Commit Subclips" : "All Committed"}>
+                                <span>
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => onCommit(id)}
+                                        color={hasUncommitted ? "primary" : "default"}
+                                        disabled={!hasUncommitted}
+                                        sx={{ opacity: hasUncommitted ? 1 : 0.5 }}
+                                    >
+                                        <CloudUpload fontSize="small" />
+                                    </IconButton>
+                                </span>
+                            </Tooltip>
+                        )}
+
                         {onCompute && (
-                            <Tooltip title="Compute Features">
-                                <IconButton
-                                    size="small"
-                                    color="secondary"
-                                    onClick={() => onCompute(id)}
-                                >
-                                    <Refresh fontSize="small" />
-                                </IconButton>
+                            <Tooltip title={hasUncommitted ? "Commit subclips first" : "Compute Features"}>
+                                <span>
+                                    <IconButton
+                                        size="small"
+                                        color="secondary"
+                                        onClick={() => onCompute(id)}
+                                        disabled={hasUncommitted}
+                                        sx={{ opacity: hasUncommitted ? 0.5 : 1 }}
+                                    >
+                                        <Refresh fontSize="small" />
+                                    </IconButton>
+                                </span>
                             </Tooltip>
                         )}
                     </Box>

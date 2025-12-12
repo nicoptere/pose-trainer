@@ -18,10 +18,10 @@ interface Props {
     onDelete?: () => void;
     color?: string;
     startTime?: number;
-    // previewDirty removed from props as throbber is removed
+    isCommitted?: boolean;
 }
 
-export function DraggableVideo({ id, url, thumbnailUrl, name, width = 80, onClick, onHover, onLeave, onDelete, color, startTime }: Props) {
+export function DraggableVideo({ id, url, thumbnailUrl, name, width = 80, onClick, onHover, onLeave, onDelete, color, startTime, isCommitted = true }: Props) {
     const { attributes, listeners, setNodeRef, transform } = useDraggable({
         id: id,
         data: { type: 'video' }
@@ -51,6 +51,21 @@ export function DraggableVideo({ id, url, thumbnailUrl, name, width = 80, onClic
                     border: color ? `2px solid ${color}` : 'none',
                     userSelect: 'none' // Prevent selection
                 }}>
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        top: 4,
+                        left: 4,
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                        bgcolor: isCommitted ? '#4caf50' : '#f44336',
+                        border: '1px solid white',
+                        boxShadow: 1,
+                        zIndex: 10
+                    }}
+                    title={isCommitted ? "Committed" : "Not Committed"}
+                />
                 {thumbnailUrl ? (
                     <CardMedia
                         component="img"
