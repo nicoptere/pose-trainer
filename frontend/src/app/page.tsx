@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { Container, Typography, Box, Tabs, Tab } from '@mui/material';
 import ClassManager from '../components/ClassManager';
-import TestTab from '../components/TestTab';
+
 import MetadataTab from '../components/MetadataTab';
 import { useStore } from '../store/useStore';
 
@@ -57,8 +57,7 @@ export default function Home() {
         </Typography>
         <Tabs value={tabIndex} onChange={handleChange} aria-label="lab tabs">
           <Tab label="DATASET" />
-          <Tab label="Training" />
-          <Tab label="Test (Live Camera)" />
+          <Tab label="EVALUATE" />
           <Tab label="Metadata" />
         </Tabs>
       </Box>
@@ -73,9 +72,6 @@ export default function Home() {
           </Box>
         </CustomTabPanel>
         <CustomTabPanel value={tabIndex} index={2}>
-          <TestTab />
-        </CustomTabPanel>
-        <CustomTabPanel value={tabIndex} index={3}>
           <MetadataTab />
         </CustomTabPanel>
       </Box>
