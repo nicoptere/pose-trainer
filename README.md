@@ -1,3 +1,31 @@
+# conclusion
+
+The current dataset (manifest) contains:
+
+cest_nul: 2 samples (75 frames, 125 frames)
+loop: 1 sample (151 frames)
+machine: 2 samples (113 frames, 104 frames)
+Total: 5 samples.
+With sequence_length: 90 and stride: 30, this is extremely minimal data (like 2-5 windows per class). It's very likely the model is overfitting or collapsing (as seen with 33% probabilities everywhere). But since the user complained about "always a single class", they might be seeing one class stuck at 99% or something (if overfitted) or 33% if collapsed.
+
+I have triggered the Classifier Training again with the new settings (90 frames). This is running now. Once it completes, if the data is sufficient to learn something, the model will update.
+
+However, with only 5 video clips total, you cannot expect a robust classifier. It will likely memorize the 5 clips perfectly but fail on live webcam input (producing low confidence for everything, or randomly latching onto one class).
+
+I recommend adding more data if you want real results. For now, I'm waiting for the training (ID cf7d95f0...) to finish.
+
+Regarding "There's always a single class displayed": Does this mean the list of "Top Predictions" only has 1 item? My code in 
+TestTab.tsx
+ does .slice(0, 3). If prediction.all has 3 items (which it should, given 3 classes), it will show 3. If prediction.all is undefined, it shows "Waiting...".
+
+I suspect the user means "The top result is always the same class". This is consistent with "Model Collapse" (where all scores are equal, so sort is unstable or preserved index order) or "Overfitting".
+
+I will check the training output once done.
+
+
+
+
+
 # Gesture Detection, Segmentation & Clustering System
 
 PyTorch and MediaPipe-based system for detecting gestures in videos, clustering by similarity, and training classifiers for real-time gesture recognition.
