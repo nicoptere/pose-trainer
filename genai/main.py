@@ -282,6 +282,11 @@ def train_classifier():
             with open(config_path, 'r') as f:
                  conf = json.load(f)
                  output_path = conf.get('output_path', 'genai/result')
+                 seq_len = conf.get('sequence_length', 30)
+                 stride = conf.get('stride', 10)
+        else:
+            seq_len = 30
+            stride = 10
         
         abs_output_path = output_path if os.path.isabs(output_path) else os.path.join(root_dir, output_path)
         
@@ -293,7 +298,9 @@ def train_classifier():
             sys.executable, 
             backend_script,
             '--manifest', manifest_path,
-            '--output', model_output
+            '--output', model_output,
+            '--seq_len', str(seq_len),
+            '--stride', str(stride)
         ]
         
         print(f"Running classifier training: {' '.join(cmd)}")

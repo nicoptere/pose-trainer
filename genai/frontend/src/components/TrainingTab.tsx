@@ -25,6 +25,8 @@ interface GestureConfig {
     n_clusters?: number | null;
     use_hdbscan?: boolean;
     dtw_downsample_factor?: number;
+    sequence_length?: number;
+    stride?: number;
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -195,6 +197,28 @@ export default function TrainingTab() {
                             value={config.analysis_fps}
                             onChange={(e) => handleInputChange('analysis_fps', Number(e.target.value))}
                             helperText="Frames per second to analyze (lower = faster)"
+                        />
+                    </Grid>
+
+                    <Grid size={{ xs: 6 }}>
+                        <TextField
+                            fullWidth
+                            label="Buffering Length (frames)"
+                            type="number"
+                            value={config.sequence_length || 150}
+                            onChange={(e) => handleInputChange('sequence_length', Number(e.target.value))}
+                            helperText="Number of frames to buffer (Default: 150 / 5s)"
+                        />
+                    </Grid>
+
+                    <Grid size={{ xs: 6 }}>
+                        <TextField
+                            fullWidth
+                            label="Stride"
+                            type="number"
+                            value={config.stride || 10}
+                            onChange={(e) => handleInputChange('stride', Number(e.target.value))}
+                            helperText="Sliding window step size (frames)"
                         />
                     </Grid>
 

@@ -5,7 +5,7 @@ ort.env.wasm.numThreads = 1;
 ort.env.wasm.simd = true;
 
 let session = null;
-const SEQUENCE_LENGTH = 30;
+let SEQUENCE_LENGTH = 30;
 const INPUT_SIZE = 132;
 let buffer = [];
 
@@ -63,7 +63,8 @@ self.onmessage = async (e) => {
     const { type, payload } = e.data;
 
     if (type === 'init') {
-        const { modelUrl } = payload;
+        const { modelUrl, sequenceLength } = payload;
+        if (sequenceLength) SEQUENCE_LENGTH = sequenceLength;
         try {
             console.log("Initializing ONNX Session in Worker...");
             session = await ort.InferenceSession.create(modelUrl, {
@@ -92,6 +93,12 @@ self.onmessage = async (e) => {
                     data.set(buffer[i], i * INPUT_SIZE);
                 }
 
+                // LOGGING FOR VERIFICATION
+                self.postMessage({
+                    type: 'log',
+                    log: `Running inference on sequence: Shape [1, ${SEQUENCE_LENGTH}, ${INPUT_SIZE}]`
+                });
+
                 const tensor = new ort.Tensor('float32', data, [1, SEQUENCE_LENGTH, INPUT_SIZE]);
                 const results = await session.run({ input: tensor });
 
@@ -100,7 +107,10 @@ self.onmessage = async (e) => {
                 const outputName = session.outputNames[0]; // usually 'classification'
                 const classification = results[outputName].data;
 
-                self.postMessage({ type: 'result', classification: classification });
+                // Send back the latest normalized frame for visualization
+                const lastFrame = buffer[buffer.length - 1];
+
+                self.postMessage({ type: 'result', classification: classification, pose: lastFrame });
             } else {
                 self.postMessage({ type: 'buffering', count: buffer.length });
             }

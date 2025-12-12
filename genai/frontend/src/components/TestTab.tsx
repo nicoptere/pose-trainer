@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Box, Typography, Paper, LinearProgress, Alert, Card, CardContent } from '@mui/material';
+import { Box, Typography, Paper, LinearProgress, Alert, Card, CardContent, FormControlLabel, Switch } from '@mui/material';
 import Webcam from 'react-webcam';
+import { GestureClassifier } from '../services/GestureClassifier';
 
 // Define POSE_CONNECTIONS manually
 const POSE_CONNECTIONS = [
@@ -18,7 +19,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 // --- Gesture Animation Preview Component ---
 const GesturePreview = ({ animation, width = 120, height = 120, color = "#4ADE80" }: { animation: any, width?: number, height?: number, color?: string }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const requestRef = useRef<number>();
+    const requestRef = useRef<number>(0);
     const frameIndex = useRef(0);
     const startTimeRef = useRef<number>(0);
 
@@ -49,14 +50,44 @@ const GesturePreview = ({ animation, width = 120, height = 120, color = "#4ADE80
                     ctx.lineCap = 'round';
                     ctx.lineJoin = 'round';
 
+                    // Auto-scale to fit
+                    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+                    // First pass: find bounds of the current frame
+                    for (let i = 0; i < 33; i++) {
+                        const pt = getPoint(i);
+                        if (pt.x < minX) minX = pt.x;
+                        if (pt.x > maxX) maxX = pt.x;
+                        if (pt.y < minY) minY = pt.y;
+                        if (pt.y > maxY) maxY = pt.y;
+                    }
+
+                    // Add padding
+                    const padding = 0.5;
+                    const contentW = maxX - minX || 1;
+                    const contentH = maxY - minY || 1;
+
+                    // Determine scale to fit
+                    const scaleX = width / (contentW + padding);
+                    const scaleY = height / (contentH + padding);
+                    const scale = Math.min(scaleX, scaleY);
+
+                    const centerX = (minX + maxX) / 2;
+                    const centerY = (minY + maxY) / 2;
+
                     ctx.beginPath();
                     POSE_CONNECTIONS.forEach(([start, end]) => {
                         const p1 = getPoint(start);
                         const p2 = getPoint(end);
-                        if (p1.x > 0 && p2.x > 0) {
-                            ctx.moveTo(p1.x * width, p1.y * height);
-                            ctx.lineTo(p2.x * width, p2.y * height);
-                        }
+
+                        // Map: (val - center) * scale + CanvasCenter
+                        const x1 = (p1.x - centerX) * scale + width / 2;
+                        const y1 = (p1.y - centerY) * scale + height / 2;
+                        const x2 = (p2.x - centerX) * scale + width / 2;
+                        const y2 = (p2.y - centerY) * scale + height / 2;
+
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
                     });
                     ctx.stroke();
                 }
@@ -91,59 +122,79 @@ export default function TestTab() {
     const [modelError, setModelError] = useState<string | null>(null);
     const [labels, setLabels] = useState<string[]>([]);
     const [animations, setAnimations] = useState<any>(null);
-    const [prediction, setPrediction] = useState<{ label: string; confidence: number; index: number } | null>(null);
+    const [prediction, setPrediction] = useState<{
+        label: string;
+        confidence: number;
+        index: number;
+        all: Array<{ label: string; confidence: number; index: number }>;
+        pose?: number[];
+    } | null>(null);
     const [inferenceTime, setInferenceTime] = useState<number>(0);
     const [bufferStatus, setBufferStatus] = useState<number>(0);
+    const [bufferingMsg, setBufferingMsg] = useState<string | null>(null);
+
+    // Debug Controls
+    const [flipInput, setFlipInput] = useState(true);
+    const flipInputRef = useRef(true); // Ref to access current value in callbacks
+
+    useEffect(() => {
+        flipInputRef.current = flipInput;
+    }, [flipInput]);
 
     const webcamRef = useRef<Webcam>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const poseRef = useRef<any>(null);
-    const onnxWorkerRef = useRef<Worker | null>(null);
+    const classifierRef = useRef<GestureClassifier | null>(null);
     const requestRef = useRef<number>(0);
 
     useEffect(() => {
+        let mounted = true;
+
         const loadResources = async () => {
             try {
+                if (!mounted) return;
                 setModelLoading(true);
 
-                // 1. Load Data
-                const labelsRes = await fetch(`${API_URL}/api/model/labels`);
-                if (!labelsRes.ok) throw new Error("Failed to load labels");
-                const labelsData = await labelsRes.json();
-                setLabels(labelsData.class_names);
+                // Initialize Gesture Classifier
+                const classifier = new GestureClassifier({
+                    onResult: (res) => { if (mounted) setPrediction(res); },
+                    onBuffering: (count, msg) => {
+                        if (mounted) {
+                            setBufferStatus(count);
+                            setBufferingMsg(msg);
+                        }
+                    },
+                    onError: (err) => { if (mounted) setModelError(err); },
+                    onLog: (msg) => console.log("[Classifier]", msg)
+                });
+
+                await classifier.init(API_URL);
+                if (!mounted) {
+                    classifier.destroy();
+                    return;
+                }
+
+                setLabels(classifier.getLabels());
+                classifierRef.current = classifier;
 
                 try {
                     const animRes = await fetch(`${API_URL}/api/model/animations`);
-                    if (animRes.ok) {
+                    if (animRes.ok && mounted) {
                         const animData = await animRes.json();
                         setAnimations(animData.animations);
                     }
                 } catch (e) { console.warn("Animations load failed", e); }
 
-                // 2. Initialize ONNX Worker
-                onnxWorkerRef.current = new Worker('/onnx/worker.js');
-                const modelUrl = `${API_URL}/api/model/onnx`;
-
-                onnxWorkerRef.current.postMessage({ type: 'init', payload: { modelUrl } });
-
-                onnxWorkerRef.current.onmessage = (e) => {
-                    const { type, classification, error, count } = e.data;
-                    if (type === 'ready') {
-                        console.log("ONNX Worker Ready");
-                    } else if (type === 'result') {
-                        processClassification(classification);
-                    } else if (type === 'buffering') {
-                        setBufferStatus(count);
-                    } else if (type === 'error') {
-                        console.error("ONNX Worker Error:", error);
-                    }
-                };
-
                 // 3. Load MediaPipe Pose (Main Thread)
+                // Fix for "Module.arguments" error: Ensure global Module is clear
                 if ((window as any).Module) {
+                    console.warn("Clearing global Module before MediaPipe load");
                     (window as any).Module = undefined;
                 }
+
                 const mpPose = await import('@mediapipe/pose');
+                if (!mounted) return;
+
                 const PoseKlass = mpPose.Pose;
                 const pose = new PoseKlass({
                     locateFile: (file: string) => `/mediapipe/pose/${file}`
@@ -158,6 +209,11 @@ export default function TestTab() {
                 });
                 pose.onResults(onPoseResults);
                 await pose.initialize();
+
+                if (!mounted) {
+                    pose.close();
+                    return;
+                }
                 poseRef.current = pose;
 
                 setModelLoading(false);
@@ -165,42 +221,22 @@ export default function TestTab() {
 
             } catch (err: any) {
                 console.error("Setup error:", err);
-                setModelError(err.message || "Failed to load resources.");
-                setModelLoading(false);
+                if (mounted) {
+                    setModelError(err.message || "Failed to load resources.");
+                    setModelLoading(false);
+                }
             }
         };
 
         loadResources();
 
         return () => {
+            mounted = false;
             if (poseRef.current) poseRef.current.close();
-            if (onnxWorkerRef.current) onnxWorkerRef.current.terminate();
+            if (classifierRef.current) classifierRef.current.destroy();
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
         };
     }, []);
-
-    const processClassification = (classification: Float32Array) => {
-        let maxProb = -Infinity;
-        let maxIdx = -1;
-        const expScores = [];
-        let sumExp = 0;
-
-        for (let i = 0; i < classification.length; i++) {
-            const val = classification[i];
-            const exp = Math.exp(val);
-            expScores.push(exp);
-            sumExp += exp;
-            if (val > maxProb) {
-                maxProb = val;
-                maxIdx = i;
-            }
-        }
-        const confidence = expScores[maxIdx] / sumExp;
-
-        setPrediction(prev => {
-            return { label: `Class ${maxIdx}`, confidence, index: maxIdx };
-        });
-    };
 
     const startPredictionLoop = useCallback(() => {
         const offscreenCanvas = document.createElement('canvas');
@@ -268,10 +304,8 @@ export default function TestTab() {
                 }
             });
 
-            if (onnxWorkerRef.current) {
-                // Flipped back to Observer for Model (1-x)
-                const safeLandmarks = landmarks.map((l: any) => ({ x: 1.0 - l.x, y: l.y, z: l.z, visibility: l.visibility }));
-                onnxWorkerRef.current.postMessage({ type: 'process', payload: safeLandmarks });
+            if (classifierRef.current) {
+                classifierRef.current.process(landmarks, flipInputRef.current);
             }
         }
         ctx.restore();
@@ -283,6 +317,22 @@ export default function TestTab() {
             {modelLoading && <LinearProgress />}
             {modelError && <Alert severity="error">{modelError}</Alert>}
 
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                <FormControlLabel
+                    control={
+                        <Switch
+                            checked={flipInput}
+                            onChange={(e) => setFlipInput(e.target.checked)}
+                            color="secondary"
+                        />
+                    }
+                    label="Mirror Input to Model"
+                />
+                <Typography variant="caption" color="text.secondary">
+                    (Toggle this if detection fails - matches webcam mirroring)
+                </Typography>
+            </Box>
+
             <Box sx={{ display: 'flex', gap: 2, flex: 1, minHeight: 0 }}>
                 <Box sx={{ position: 'relative', flex: 2, bgcolor: 'black', borderRadius: 2, overflow: 'hidden' }}>
                     <Webcam
@@ -292,32 +342,78 @@ export default function TestTab() {
                         mirrored
                     />
                     <canvas ref={canvasRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }} />
+
+                    {/* Buffering Indicator Overlay */}
+                    {bufferingMsg && (
+                        <Box sx={{
+                            position: 'absolute',
+                            top: 10,
+                            right: 10,
+                            bgcolor: 'rgba(0,0,0,0.6)',
+                            color: 'white',
+                            px: 2,
+                            py: 1,
+                            borderRadius: 1
+                        }}>
+                            <Typography variant="caption">{bufferingMsg}</Typography>
+                        </Box>
+                    )}
                 </Box>
 
                 <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <Card sx={{ flex: 1 }}>
                         <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
-                            <Typography variant="body2" color="text.secondary">Prediction</Typography>
-                            {animations && prediction && animations[String(prediction.index)] && (
-                                <Box sx={{ my: 2 }}>
-                                    <GesturePreview animation={animations[String(prediction.index)]} />
+                            <Typography variant="body2" color="text.secondary">Top Predictions</Typography>
+
+                            {prediction && prediction.pose && (
+                                <Box sx={{ mb: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                    <Typography variant="caption" color="text.secondary" gutterBottom>Live Model Input</Typography>
+                                    <Box sx={{ bgcolor: 'black', borderRadius: 1, overflow: 'hidden', border: '1px solid #333' }}>
+                                        <GesturePreview
+                                            animation={{ sequence: [prediction.pose] }}
+                                            width={100}
+                                            height={100}
+                                            color="#00FFFF"
+                                        />
+                                    </Box>
                                 </Box>
                             )}
-                            <Typography variant="h3" color="primary" sx={{ my: 1 }}>
-                                {prediction ? (labels[prediction.index] || prediction.label) : "Waiting..."}
-                            </Typography>
-                            {prediction && (
-                                <Box sx={{ width: '100%' }}>
-                                    <Typography variant="body2" gutterBottom>
-                                        Confidence: {(prediction.confidence * 100).toFixed(1)}%
-                                    </Typography>
-                                    <LinearProgress
-                                        variant="determinate"
-                                        value={prediction.confidence * 100}
-                                        color={prediction.confidence > 0.7 ? "success" : "warning"}
-                                        sx={{ height: 10, borderRadius: 5 }}
-                                    />
+
+                            {prediction && prediction.all ? (
+                                <Box sx={{ mt: 2, width: '100%' }}>
+                                    {prediction.all.slice(0, 3).map((res, idx) => (
+                                        <Box key={res.index} sx={{ mb: 2 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                                                <Typography variant={idx === 0 ? "h6" : "body1"} fontWeight={idx === 0 ? "bold" : "normal"}>
+                                                    {idx + 1}. {res.label}
+                                                </Typography>
+                                                <Typography variant="caption" fontWeight="bold">
+                                                    {(res.confidence * 100).toFixed(1)}%
+                                                </Typography>
+                                            </Box>
+                                            <LinearProgress
+                                                variant="determinate"
+                                                value={res.confidence * 100}
+                                                color={idx === 0 ? (res.confidence > 0.7 ? "success" : "warning") : "primary"}
+                                                sx={{ height: idx === 0 ? 8 : 4, borderRadius: 4, opacity: idx === 0 ? 1 : 0.6 }}
+                                            />
+                                        </Box>
+                                    ))}
+
+                                    {animations && prediction && animations[String(prediction.index)] && (
+                                        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+                                            <GesturePreview
+                                                animation={animations[String(prediction.index)]}
+                                                width={100}
+                                                height={100}
+                                            />
+                                        </Box>
+                                    )}
                                 </Box>
+                            ) : (
+                                <Typography variant="h5" align="center" color="text.secondary" sx={{ py: 4 }}>
+                                    Waiting...
+                                </Typography>
                             )}
                         </CardContent>
                     </Card>

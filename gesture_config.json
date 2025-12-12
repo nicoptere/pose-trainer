@@ -1,4 +1,5 @@
 {
     "analysis_fps": 30,
-    "output_path": "genai/result"
+    "output_path": "genai/result",
+    "sequence_length": 150
 }

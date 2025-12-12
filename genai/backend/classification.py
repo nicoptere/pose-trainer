@@ -78,6 +78,9 @@ class GestureDataset(Dataset):
         
         # Pad or truncate to target length
         seq_len = len(sequence)
+        
+        # NOTE: Sequence should already be sliced by sliding window before reaching here
+        # But we keep padding logic for safety
         if seq_len < self.sequence_length:
             # Pad with zeros
             padding = np.zeros((self.sequence_length - seq_len, sequence.shape[1]))
@@ -176,12 +179,18 @@ def load_gesture_sequence(
     return np.array(landmarks_list)
 
 
-def load_training_data(manifest_path: str) -> Tuple[List[np.ndarray], List[int]]:
+def load_training_data(
+    manifest_path: str, 
+    sequence_length: int = 30,
+    stride: int = 10
+) -> Tuple[List[np.ndarray], List[int]]:
     """
-    Load training data from clustering manifest.
+    Load training data from clustering manifest with sliding window.
     
     Args:
         manifest_path: Path to clustering_manifest.json
+        sequence_length: Length of window
+        stride: Step size for sliding window
         
     Returns:
         Tuple of (sequences, labels)
@@ -204,26 +213,54 @@ def load_training_data(manifest_path: str) -> Tuple[List[np.ndarray], List[int]]
         
         for gesture_info in tqdm(gestures, desc=f"  Cluster {cluster_id}"):
             # Load gesture sequence
-            sequence = load_gesture_sequence(
+            full_sequence = load_gesture_sequence(
                 video_path=gesture_info['source_video'],
                 start_frame=gesture_info['start_frame'],
                 end_frame=gesture_info['end_frame'],
                 analysis_fps=analysis_fps
             )
             
-            sequences.append(sequence)
-            labels.append(int(cluster_id))
+            # Apply sliding window
+            seq_len = len(full_sequence)
+            
+            if seq_len <= sequence_length:
+                # If shorter than window, take as is (padding will happen in Dataset)
+                sequences.append(full_sequence)
+                labels.append(int(cluster_id))
+            else:
+                # Slide window
+                # Ensure we take at least one window
+                num_windows = max(1, (seq_len - sequence_length) // stride + 1)
+                
+                for i in range(num_windows):
+                    start = i * stride
+                    end = start + sequence_length
+                    
+                    # Ensure we don't go out of bounds (though slice handles it)
+                    if start >= seq_len:
+                        break
+                        
+                    window = full_sequence[start:end]
+                    sequences.append(window)
+                    labels.append(int(cluster_id))
     
     return sequences, labels
 
 
-def train_classifier(manifest_path: str, output_model_path: str):
+def train_classifier(
+    manifest_path: str, 
+    output_model_path: str,
+    sequence_length: int = 30,
+    stride: int = 10
+):
     """
     Train a gesture classifier from clustered data.
     
     Args:
         manifest_path: Path to clustering_manifest.json
         output_model_path: Path to save trained ONNX model
+        sequence_length: Input sequence length
+        stride: Sliding window stride
     """
     print("=" * 70)
     print("GESTURE CLASSIFIER TRAINING")
@@ -238,13 +275,15 @@ def train_classifier(manifest_path: str, output_model_path: str):
     
     print(f"Configuration:")
     print(f"  Number of classes: {num_classes}")
+    print(f"  Sequence Length: {sequence_length}")
+    print(f"  Stride: {stride}")
     print(f"  Batch size: {BATCH_SIZE}")
     print(f"  Learning rate: {LEARNING_RATE}")
     print(f"  Epochs: {EPOCHS}")
     print()
     
     # Load training data
-    sequences, labels = load_training_data(manifest_path)
+    sequences, labels = load_training_data(manifest_path, sequence_length, stride)
     
     print(f"\nLoaded {len(sequences)} training samples")
     
@@ -275,8 +314,8 @@ def train_classifier(manifest_path: str, output_model_path: str):
     print()
     
     # Create datasets
-    train_dataset = GestureDataset(train_seqs, train_labels, sequence_length=config.SEQUENCE_LENGTH)
-    test_dataset = GestureDataset(test_seqs, test_labels, sequence_length=config.SEQUENCE_LENGTH)
+    train_dataset = GestureDataset(train_seqs, train_labels, sequence_length=sequence_length)
+    test_dataset = GestureDataset(test_seqs, test_labels, sequence_length=sequence_length)
     
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
@@ -388,7 +427,7 @@ def train_classifier(manifest_path: str, output_model_path: str):
     wrapped_model = ModelWrapper(model)
     wrapped_model.eval()
     
-    dummy_input = torch.randn(1, config.SEQUENCE_LENGTH, config.INPUT_SIZE).to(device)
+    dummy_input = torch.randn(1, sequence_length, config.INPUT_SIZE).to(device)
     
     os.makedirs(os.path.dirname(output_model_path), exist_ok=True)
     
@@ -542,6 +581,10 @@ def main():
                        help='Path to clustering_manifest.json')
     parser.add_argument('--output', type=str, default=OUTPUT_MODEL_PATH,
                        help='Path to save ONNX model')
+    parser.add_argument('--seq_len', type=int, default=30,
+                       help='Sequence length (frames)')
+    parser.add_argument('--stride', type=int, default=10,
+                       help='Sliding window stride (frames)')
     parser.add_argument('--extract-animations', action='store_true',
                        help='Extract cluster animations for web app instead of training')
     parser.add_argument('--animations-output', type=str, default='public/cluster_animations.json',
@@ -559,7 +602,12 @@ def main():
         extract_cluster_animations(args.manifest, args.animations_output)
     else:
         # Training mode
-        train_classifier(args.manifest, args.output)
+        train_classifier(
+            args.manifest, 
+            args.output,
+            sequence_length=args.seq_len,
+            stride=args.stride
+        )
 
 
 if __name__ == "__main__":
