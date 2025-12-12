@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { Container, Typography, Box, Tabs, Tab } from '@mui/material';
 import ClassManager from '../components/ClassManager';
 
+import EvaluateTab from '../components/EvaluateTab';
 import MetadataTab from '../components/MetadataTab';
 import { useStore } from '../store/useStore';
 
@@ -67,9 +68,7 @@ export default function Home() {
           <ClassManager />
         </CustomTabPanel>
         <CustomTabPanel value={tabIndex} index={1}>
-          <Box sx={{ p: 4, textAlign: 'center' }}>
-            <Typography variant="h5" color="text.secondary">Training Interface Coming Soon</Typography>
-          </Box>
+          <EvaluateTab />
         </CustomTabPanel>
         <CustomTabPanel value={tabIndex} index={2}>
           <MetadataTab />

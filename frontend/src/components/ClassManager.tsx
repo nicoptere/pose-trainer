@@ -344,14 +344,33 @@ export default function ClassManager() {
                                     }}
                                     onDelete={classId !== 'Unsorted' ? deleteClass : undefined}
                                     onUpdate={updateClass}
-                                    onCompute={(id) => {
-                                        console.log(`Compute features for class ${id}`);
-                                        console.log("Subclips:", classVideos);
+                                    onCompute={async (id) => {
+                                        console.log(`Retraining class ${id}...`);
+                                        const subclip = classVideos.find(v => v.parentVideoId);
+                                        if (!subclip) {
+                                            alert("No subclips found to train on.");
+                                            return;
+                                        }
 
-                                        // TODO: Trigger backend computation
-                                        // For now, toggle dirty flag to show visual feedback
-                                        if (realClass) {
-                                            updateClass(id, { isDirty: !realClass.isDirty });
+                                        // Quick set loading state if possible (Store doesn't have transient loading state per class, but isDirty serves as a visual indicator for now or we can use local state)
+                                        // For now let's just run it.
+                                        try {
+                                            // Fetch video blob
+                                            const response = await fetch(subclip.url);
+                                            if (!response.ok) throw new Error('Failed to download video subclip');
+                                            const blob = await response.blob();
+                                            const file = new File([blob], `${realClass?.name || 'gesture'}.mp4`, { type: blob.type });
+
+                                            // Import dynamically to avoid SSR issues if any, though standard import is fine
+                                            const { analyzeGestureVideo } = await import('../services/geminiService');
+                                            const description = await analyzeGestureVideo(file, realClass?.name || 'gesture');
+
+                                            // Update Store
+                                            updateClass(id, { description, isDirty: true });
+                                            console.log("Training complete for", id);
+                                        } catch (e) {
+                                            console.error("Training failed", e);
+                                            alert("Training failed: " + e);
                                         }
                                     }}
                                 >
