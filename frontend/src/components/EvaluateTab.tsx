@@ -63,7 +63,10 @@ export default function EvaluateTab() {
 
     // --- Live Recognition Logic ---
     const launchGemini = async () => {
-        const readyClasses = classes.filter(c => c.description && c.description.trim().length > 0);
+        // Force refresh dataset to ensure latest descriptions are used
+        await useStore.getState().fetchDataset();
+        const freshClasses = useStore.getState().classes;
+        const readyClasses = freshClasses.filter(c => c.description && c.description.trim().length > 0);
         const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
         if (!apiKey) {
             addLog("API Key missing");
