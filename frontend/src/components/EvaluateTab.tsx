@@ -4,35 +4,19 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
     Box,
     Button,
-    Card,
-    CardContent,
-    CardActions,
-    Typography,
-    Grid,
     Chip,
-    IconButton,
-    CircularProgress,
-    List,
-    ListItem,
-    ListItemText,
-    ListItemIcon,
+    Typography,
     Paper,
     Divider,
-    Alert
+    List,
+    ListItem,
+    ListItemText
 } from '@mui/material';
-import {
-    PlayArrow,
-    Stop,
-    CheckCircle,
-    ErrorOutline,
-    VideoCameraFront,
-    ModelTraining,
-    ArrowBack
-} from '@mui/icons-material';
-import { useStore, GestureClass } from '../store/useStore';
-import { analyzeGestureVideo, identifyGestureToolDeclaration } from '../services/geminiService';
+import { useStore } from '../store/useStore';
+import { identifyGestureToolDeclaration } from '../services/geminiService';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { pcmTo16BitBase64 } from '../services/utils';
+import Timeline from './Timeline';
 
 interface DetectedGesture {
     name: string;
@@ -49,6 +33,10 @@ export default function EvaluateTab() {
     const [detectedGesture, setDetectedGesture] = useState<DetectedGesture | null>(null);
     const [debugLog, setDebugLog] = useState<string[]>([]);
 
+    // Timeline State
+    const [eventHistory, setEventHistory] = useState<DetectedGesture[]>([]);
+    const [sessionStartTime, setSessionStartTime] = useState<number>(Date.now());
+
     // Refs for Live Session
     const sessionRef = useRef<Promise<any> | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
@@ -58,7 +46,7 @@ export default function EvaluateTab() {
     const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
     const addLog = (msg: string) => {
-        setDebugLog(prev => [msg, ...prev].slice(0, 20));
+        setDebugLog(prev => [msg, ...prev].slice(0, 50));
     };
 
     // --- Live Recognition Logic ---
@@ -67,6 +55,12 @@ export default function EvaluateTab() {
         await useStore.getState().fetchDataset();
         const freshClasses = useStore.getState().classes;
         const readyClasses = freshClasses.filter(c => c.description && c.description.trim().length > 0);
+
+        // Reset Session Data
+        setEventHistory([]);
+        setSessionStartTime(Date.now());
+        setDebugLog([]);
+
         const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
         if (!apiKey) {
             addLog("API Key missing");
@@ -162,7 +156,9 @@ export default function EvaluateTab() {
                                 const name = call.args['gestureName'] as string;
                                 const confidence = call.args['confidence'];
                                 addLog(`DETECTED: ${name} (${confidence || 'N/A'})`);
-                                setDetectedGesture({ name, timestamp: Date.now() });
+                                const newEvent = { name, timestamp: Date.now() };
+                                setDetectedGesture(newEvent);
+                                setEventHistory(prev => [...prev, newEvent]);
 
                                 sessionPromise.then(session => {
                                     session.sendToolResponse({
@@ -199,8 +195,6 @@ export default function EvaluateTab() {
         if (sourceRef.current) { try { sourceRef.current.disconnect(); } catch (e) { } sourceRef.current = null; }
         if (processorRef.current) { try { processorRef.current.disconnect(); } catch (e) { } processorRef.current = null; }
         if (audioContextRef.current) { try { audioContextRef.current.close(); } catch (e) { } audioContextRef.current = null; }
-        // Do NOT stop the video streamRef here, so camera stays on when session stops.
-        // if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
 
         if (sessionRef.current) {
             sessionRef.current.then((s: any) => {
@@ -224,7 +218,6 @@ export default function EvaluateTab() {
 
                 if (videoRef.current) {
                     videoRef.current.srcObject = stream;
-                    // videoRef.current.play(); // autoPlay is on the element
                 }
             } catch (e: any) {
                 addLog("Camera access failed: " + e.message);
@@ -233,7 +226,6 @@ export default function EvaluateTab() {
         initCamera();
 
         return () => {
-            // Cleanup stream on unmount
             if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); }
             stopLiveSession();
         };
@@ -241,7 +233,7 @@ export default function EvaluateTab() {
 
     return (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 2, p: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
                 {!isConnected ? (
                     <Button variant="contained" color="primary" onClick={launchGemini}>
                         Connect AI
@@ -288,18 +280,30 @@ export default function EvaluateTab() {
                     )}
                 </Box>
 
-                {/* Sidebar / Logs */}
-                <Paper sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 2 }} elevation={3}>
-                    <Typography variant="subtitle2" gutterBottom>Session Log</Typography>
-                    <Divider sx={{ mb: 1 }} />
-                    <List dense sx={{ flex: 1, overflowY: 'auto', bgcolor: '#f5f5f5', borderRadius: 1 }}>
-                        {debugLog.map((log, i) => (
-                            <ListItem key={i}>
-                                <ListItemText primary={log} primaryTypographyProps={{ fontFamily: 'monospace', fontSize: '12px' }} />
-                            </ListItem>
-                        ))}
-                    </List>
-                </Paper>
+                {/* Right Sidebar: Timeline + Logs */}
+                <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 300 }}>
+
+                    {/* Timeline */}
+                    <Timeline
+                        classes={classes}
+                        events={eventHistory}
+                        startTime={sessionStartTime}
+                        isRunning={isConnected}
+                    />
+
+                    {/* Logs */}
+                    <Paper sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 1 }} elevation={3}>
+                        <Typography variant="caption" sx={{ fontWeight: 'bold', mb: 1 }}>Session Log</Typography>
+                        <Divider sx={{ mb: 0.5 }} />
+                        <List dense sx={{ flex: 1, overflowY: 'auto', bgcolor: '#f5f5f5', borderRadius: 1, p: 0 }}>
+                            {debugLog.map((log, i) => (
+                                <ListItem key={i} sx={{ py: 0, px: 1 }}>
+                                    <ListItemText primary={log} primaryTypographyProps={{ fontFamily: 'monospace', fontSize: '11px', lineHeight: 1.2 }} />
+                                </ListItem>
+                            ))}
+                        </List>
+                    </Paper>
+                </Box>
             </Box>
         </Box>
     );

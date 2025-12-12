@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2025-12-12T16:57:17.413Z",
+    "generatedAt": "2025-12-12T18:17:14.107Z",
     "version": "1.0",
     "description": "Gesture Recognition Dataset with Subclips (Synced from Frontend)"
   },
@@ -96,7 +96,7 @@
     {
       "id": "machine",
       "name": "machine",
-      "description": "The gesture begins with the right hand placed against the upper chest, palm facing inward, fingers held together, and the thumb slightly extended. The hand then moves forward and slightly downward, extending away from the body with the fingers still together and pointing, forming a \"pointing\" or slightly cupped shape. This two-part motion (chest touch to forward extension) is repeated multiple times. Concurrently with each gesture, a voice clearly articulates the word \"Nulle\" (French for \"zero\").",
+      "description": "The gesture begins with the right hand open, fingers together, palm facing left, resting on the chest. The hand then extends forward and slightly downwards, palm facing down, in a repetitive pushing motion, before returning to the chest. The hand maintains its open, fingers-together shape throughout this rhythmic, back-and-forth movement. An external voice consistently says \"nul\" during the gesture.",
       "hasAudio": true,
       "subclips": [
         {
@@ -120,7 +120,7 @@
     {
       "id": "loop",
       "name": "loop",
-      "description": "The gesture begins with the person standing, body slightly bent forward, and hands loosely resting on the front of their thighs or knees. The hands then perform a repetitive looping motion, stroking downwards along the thighs/knees and then returning upwards to the starting position. This rhythmic hand movement is synchronized with the head tilting downwards as the hands move down, and lifting upwards as the hands return to the initial position. A continuous, rhythmic vocalization, resembling \"ding-a-ding-a-ding-a-ding-a,\" accompanies the entire gesture, providing a distinct auditory component integral to its execution. The combination of the repetitive downward-and-upward thigh-stroking, synchronized head movement, and the specific vocal rhythm makes this a distinctive gesture.",
+      "description": "The \"loop\" gesture begins with the person standing, slightly hunched forward, head down, and hands resting lightly on the upper thighs with fingers pointing downwards. The movement involves a continuous, gentle rocking of the torso and head: from the initial forward-bent position, the person slowly raises their upper body and head slightly, then gently lowers back into the hunched posture. This creates a repetitive, fluid swaying or \"looping\" motion of the upper body, with the hands maintaining light contact with the thighs throughout. The gesture is accompanied by a continuous, melodic vocalization, sounding like sustained, often mournful \"ah\" or \"din\" sounds, which are integral to the gesture's expressive quality.",
       "hasAudio": true,
       "subclips": [
         {
@@ -144,7 +144,7 @@
     {
       "id": "cest_nul",
       "name": "cest_nul",
-      "description": "The gesture begins with the individual standing upright, both hands held at chest height in a thumbs-up position, palms facing inwards. Swiftly and simultaneously, both hands pivot downwards, rotating approximately 180 degrees at the wrists until both thumbs are pointing distinctly downwards, while the fingers remain loosely curled. This movement is accompanied by the vocalization of the word \"nul,\" signifying disapproval or something being \"bad\" or \"null.\" The key distinguishing feature is the synchronized, decisive rotation of both hands from an upward-pointing thumb to a downward-pointing thumb, reinforced by the audible declaration.",
+      "description": "The gesture begins with both hands raised to chest height, elbows bent, palms facing inwards, and thumbs pointing upwards. The hands then rotate inwards, causing both thumbs to point downwards. This \"thumbs down\" motion is performed simultaneously with both hands and is accompanied by the spoken word \"Nulle\" or \"nul,\" which means \"worthless\" or \"null\" in French. The gesture typically involves two repetitions of this motion and word.",
       "hasAudio": true,
       "subclips": [
         {
@@ -184,7 +184,7 @@
     {
       "id": "drum",
       "name": "drum",
-      "description": "The \"drum\" gesture begins with both hands held in loose fists at waist height, palms facing each other, and a small, bell-like object visibly dangling from one hand. The hands then move rhythmically and alternately up and down in short, rapid strokes, mimicking drumming. This continuous, bilateral, and vertical bobbing motion of the fists is accompanied by a distinctive, consistent rattling sound, essential to the gesture's identity and clearly distinguishing it from other hand movements.",
+      "description": "The gesture begins with both hands clenched into fists, held in front of the body at chest/abdomen height, with elbows bent. The hands then move in a rapid, alternating up-and-down motion, mimicking the striking of two small drums. The movement is primarily wrist and forearm driven, keeping the fists close to the torso. The gesture is characterized by its continuous, rhythmic action, synchronized with distinct, percussive \"boom-boom-boom\" sounds that emulate drum beats.",
       "hasAudio": true,
       "subclips": [
         {
@@ -224,7 +224,7 @@
     {
       "id": "navigue",
       "name": "navigue",
-      "description": "The gesture, \"navigue,\" begins with both hands raised to face level, fingers curled into loose C-shapes, resembling holding binoculars, with fingertips touching the temples. The motion involves subtle forward and backward or slight widening and narrowing movements of the hands and slight head tilts, enhancing the mimicry of looking through binoculars. The final position maintains the hands near the face in the \"binocular\" shape. A highly distinctive feature is the accompanying \"woop woop\" sounds produced vocally by the performer, reminiscent of a siren or cartoon sound effect, which seems integral to the gesture.",
+      "description": "The individual stands upright with both hands raised to eye level. The index fingers are extended and touch the bridge of the nose or the inner corners of the eyes, while the thumbs are also extended, pointing outwards, and the remaining fingers are curled into a fist. From this initial position, both index fingers perform small, synchronized, circular or rubbing motions around the nose/eye area. This repetitive motion is accompanied by a continuous, high-pitched, hooting \"Ooh-ooh-ooh-ooh-ooh\" sound, adding a playful or inquisitive auditory element to the gesture. The gaze often follows the finger movements, enhancing the sense of observation or peeking.",
       "hasAudio": true,
       "subclips": [
         {
