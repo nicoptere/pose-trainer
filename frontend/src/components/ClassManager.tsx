@@ -14,6 +14,7 @@ export default function ClassManager() {
     const videos = useStore((state) => state.videos);
     const moveVideo = useStore((state) => state.moveVideo);
     const deleteClass = useStore((state) => state.deleteClass);
+    const updateClass = useStore((state) => state.updateClass);
     const deleteRecording = useStore((state) => state.deleteRecording);
 
     const [activeId, setActiveId] = useState<string | null>(null);
@@ -333,8 +334,26 @@ export default function ClassManager() {
                                 <DroppableClass
                                     key={classId}
                                     id={classId}
-                                    title={`${clsName} (${classVideos.length})`}
+                                    classData={realClass || {
+                                        id: classId,
+                                        name: clsName,
+                                        count: classVideos.length,
+                                        hasAudio: false,
+                                        isDirty: false,
+                                        caption: ''
+                                    }}
                                     onDelete={classId !== 'Unsorted' ? deleteClass : undefined}
+                                    onUpdate={updateClass}
+                                    onCompute={(id) => {
+                                        console.log(`Compute features for class ${id}`);
+                                        console.log("Subclips:", classVideos);
+
+                                        // TODO: Trigger backend computation
+                                        // For now, toggle dirty flag to show visual feedback
+                                        if (realClass) {
+                                            updateClass(id, { isDirty: !realClass.isDirty });
+                                        }
+                                    }}
                                 >
                                     {classVideos.map(video => (
                                         <DraggableVideo

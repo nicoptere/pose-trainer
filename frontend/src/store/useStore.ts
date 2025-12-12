@@ -32,6 +32,9 @@ export interface GestureClass {
   id: string;
   name: string;
   count: number;
+  hasAudio: boolean;
+  isDirty: boolean;
+  caption: string;
 }
 
 interface AppState {
@@ -49,6 +52,7 @@ interface AppState {
   deleteRecording: (id: string) => void;
   moveVideo: (videoId: string, targetClassId: string) => void;
   updateVideo: (id: string, updates: Partial<VideoClip>) => void;
+  updateClass: (id: string, updates: Partial<GestureClass>) => void;
   deleteClass: (id: string) => Promise<void>;
 
   // Sync
@@ -70,7 +74,14 @@ export const useStore = create<AppState>()(
           // Handle standard scan response (Grouped Array) - from /api/videos
           if (Array.isArray(data)) {
             data.forEach((group: any) => {
-              loadedClasses.push({ id: group.id, name: group.name, count: group.count });
+              loadedClasses.push({
+                id: group.id,
+                name: group.name,
+                count: group.count,
+                hasAudio: group.hasAudio || false,
+                isDirty: group.isDirty || false,
+                caption: group.caption || ''
+              });
               group.videos.forEach((vid: any) => {
                 // Check if this is a subclip (has parentVideoId) or a regular video
                 if (vid.parentVideoId) {
@@ -104,7 +115,14 @@ export const useStore = create<AppState>()(
           else if (data.classes && data.sourceVideos) {
             // 1. Load Classes & Subclips
             data.classes.forEach((c: any) => {
-              loadedClasses.push({ id: c.id, name: c.name, count: 0 });
+              loadedClasses.push({
+                id: c.id,
+                name: c.name,
+                count: 0,
+                hasAudio: c.hasAudio || false,
+                isDirty: c.isDirty || false,
+                caption: c.caption || ''
+              });
 
               if (c.subclips) {
                 c.subclips.forEach((sc: any) => {
@@ -177,7 +195,14 @@ export const useStore = create<AppState>()(
           const data = await res.json();
           if (data.success) {
             set((state) => ({
-              classes: [...state.classes, { id: data.name, name: data.name, count: 0 }]
+              classes: [...state.classes, {
+                id: data.name,
+                name: data.name,
+                count: 0,
+                hasAudio: false,
+                isDirty: false,
+                caption: ''
+              }]
             }));
           }
         } catch (err) {
@@ -270,6 +295,10 @@ export const useStore = create<AppState>()(
 
       updateVideo: (id, updates) => set((state) => ({
         videos: state.videos.map(v => v.id === id ? { ...v, ...updates } : v)
+      })),
+
+      updateClass: (id, updates) => set((state) => ({
+        classes: state.classes.map(c => c.id === id ? { ...c, ...updates } : c)
       })),
 
       deleteClass: async (id: string) => {
