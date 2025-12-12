@@ -2,7 +2,7 @@
   "total_gestures": 5,
   "num_clusters": 3,
   "metric": "manual",
-  "analysis_fps": 30,
+  "analysis_fps": 15,
   "clustering_method": "manual_folders",
   "clusters": {
     "0": {
@@ -12,17 +12,17 @@
           "source_video": "C:\\ML\\perso\\pose-trainer\\genai\\dataset\\cest_nul\\subclip-1765401983674-y1bhmlq2p.mp4",
           "video_name": "subclip-1765401983674-y1bhmlq2p.mp4",
           "start_frame": 0,
-          "end_frame": 150,
+          "end_frame": 75,
           "duration_seconds": 5.0,
-          "duration_frames": 150
+          "duration_frames": 75
         },
         {
           "source_video": "C:\\ML\\perso\\pose-trainer\\genai\\dataset\\cest_nul\\subclip-1765445143295-e8rtpe4g8.mp4",
           "video_name": "subclip-1765445143295-e8rtpe4g8.mp4",
           "start_frame": 0,
-          "end_frame": 250,
+          "end_frame": 125,
           "duration_seconds": 8.333333333333334,
-          "duration_frames": 250
+          "duration_frames": 125
         }
       ],
       "label": "cest_nul"
@@ -34,9 +34,9 @@
           "source_video": "C:\\ML\\perso\\pose-trainer\\genai\\dataset\\loop\\subclip-1765402487045-szai68ikr.mp4",
           "video_name": "subclip-1765402487045-szai68ikr.mp4",
           "start_frame": 0,
-          "end_frame": 301,
-          "duration_seconds": 10.033333333333333,
-          "duration_frames": 301
+          "end_frame": 151,
+          "duration_seconds": 10.066666666666666,
+          "duration_frames": 151
         }
       ],
       "label": "loop"
@@ -48,17 +48,17 @@
           "source_video": "C:\\ML\\perso\\pose-trainer\\genai\\dataset\\machine\\subclip-1765402039535-3kwklznbv.mp4",
           "video_name": "subclip-1765402039535-3kwklznbv.mp4",
           "start_frame": 0,
-          "end_frame": 225,
-          "duration_seconds": 7.5,
-          "duration_frames": 225
+          "end_frame": 113,
+          "duration_seconds": 7.533333333333333,
+          "duration_frames": 113
         },
         {
           "source_video": "C:\\ML\\perso\\pose-trainer\\genai\\dataset\\machine\\subclip-1765402388115-1g1hfxi6e.mp4",
           "video_name": "subclip-1765402388115-1g1hfxi6e.mp4",
           "start_frame": 0,
-          "end_frame": 207,
-          "duration_seconds": 6.9,
-          "duration_frames": 207
+          "end_frame": 104,
+          "duration_seconds": 6.933333333333334,
+          "duration_frames": 104
         }
       ],
       "label": "machine"
