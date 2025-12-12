@@ -114,18 +114,6 @@ export function DroppableClass({ id, classData, children, onDelete, onUpdate, on
 
                     {/* Action Buttons Column */}
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        {onDelete && (
-                            <Tooltip title="Delete Class">
-                                <IconButton
-                                    size="small"
-                                    onClick={() => onDelete(id)}
-                                    sx={{ opacity: 0.6, '&:hover': { opacity: 1, color: 'error.main' } }}
-                                >
-                                    <Delete fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                        )}
-
                         {onCommit && (
                             <Tooltip title={hasUncommitted ? "Commit Subclips" : "All Committed"}>
                                 <span>
@@ -155,6 +143,18 @@ export function DroppableClass({ id, classData, children, onDelete, onUpdate, on
                                         <Refresh fontSize="small" />
                                     </IconButton>
                                 </span>
+                            </Tooltip>
+                        )}
+
+                        {onDelete && (
+                            <Tooltip title="Delete Class">
+                                <IconButton
+                                    size="small"
+                                    onClick={() => onDelete(id)}
+                                    sx={{ opacity: 0.6, '&:hover': { opacity: 1, color: 'error.main' } }}
+                                >
+                                    <Delete fontSize="small" />
+                                </IconButton>
                             </Tooltip>
                         )}
                     </Box>

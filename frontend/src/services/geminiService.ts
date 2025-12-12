@@ -9,6 +9,7 @@ const getClient = () => {
 };
 
 export const analyzeGestureVideo = async (file: File, gestureName: string, hasAudio: boolean = false): Promise<string> => {
+  console.log(`[GeminiService] Analyzing file: ${file.name} (Audio: ${hasAudio})`);
   const ai = getClient();
   const videoPart = await fileToGenerativePart(file);
 

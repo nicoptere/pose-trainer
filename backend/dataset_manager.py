@@ -546,7 +546,7 @@ def scan_dataset(dataset_root):
                 subclip_obj = {
                     'id': sc['id'],
                     'name': sc['name'],
-                    'path': sc['parentVideoId'],
+                    'path': f"{sanitize_filename(c['name'])}/{sc['id']}.mp4",
                     'parentVideoId': sc['parentVideoId'],
                     'startTime': sc.get('startTime'),
                     'endTime': sc.get('endTime'),

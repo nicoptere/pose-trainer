@@ -17,6 +17,80 @@ export default function ClassManager() {
     const updateClass = useStore((state) => state.updateClass);
     const deleteRecording = useStore((state) => state.deleteRecording);
 
+    // --- Actions ---
+    const handleRetrainClass = async (id: string, classVideos: typeof videos, realClass: typeof classes[0]) => {
+        console.log(`Retraining class ${id}...`);
+
+        // Check if all clips are committed (Optional check, button disabled if dirty, but good for batch)
+        const uncommitted = classVideos.some(v => v.isCommitted === false);
+        if (uncommitted) {
+            console.warn(`Class ${id} has uncommitted videos. Skipping.`);
+            return;
+        }
+
+        // Strictly select subclips belonging to this class (exclude source videos which might be dragged in but not clipped?)
+        // Actually, if we drag a source video to a class, it BECOMES a subclip reference (parentVideoId is set) in moveVideo logic.
+        // So checking parentVideoId is the correct way to identify "content to train on" vs "raw source".
+        const validSubclips = classVideos.filter(v => v.parentVideoId && v.classId !== 'Unsorted');
+
+        if (validSubclips.length === 0) {
+            console.warn(`Class ${id} has no valid subclips (subclips in class folder). Skipping.`);
+            return;
+        }
+
+        const subclip = validSubclips[0]; // Pick the first available subclip
+
+        try {
+            console.log(`[ClassManager] Service Call - Uploading Video: Name="${subclip.name}", Path="${subclip.url}" (Subclip ID: ${subclip.id})`);
+            // Fetch video blob
+            const response = await fetch(subclip.url);
+            if (!response.ok) throw new Error('Failed to download video subclip');
+            const blob = await response.blob();
+            const file = new File([blob], `${realClass?.name || 'gesture'}.mp4`, { type: blob.type });
+
+            // Import dynamically
+            const { analyzeGestureVideo } = await import('../services/geminiService');
+            // Assuming hasAudio defaults to true if undefined
+            const description = await analyzeGestureVideo(file, realClass?.name || 'gesture', realClass?.hasAudio);
+
+            // Update Store
+            updateClass(id, { description, isDirty: true });
+
+            console.log("Training complete for", id);
+        } catch (e) {
+            console.error("Training failed for", id, e);
+        }
+    };
+
+    const handleRetrainAll = async () => {
+        setIsSyncing(true);
+        try {
+            for (const cls of classes) {
+                if (cls.name === 'Unsorted') continue;
+                const clsVideos = videos.filter(v => v.classId === cls.id);
+                // Skip if uncommitted videos exists to avoid partial state issues?
+                // Or just try. handleRetrainClass checks.
+                await handleRetrainClass(cls.id, clsVideos, cls);
+            }
+            // Sync once after all
+            await useStore.getState().syncDataset();
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    const handleToggleMuteAll = () => {
+        // Check if any valid class is unmuted (hasAudio=true)
+        const anyAudio = classes.some(c => c.name !== 'Unsorted' && c.hasAudio);
+        // If any has audio, we Mute All (set false). Else Unmute All.
+        const newValue = !anyAudio;
+        classes.forEach(c => {
+            if (c.name !== 'Unsorted' && c.hasAudio !== newValue) {
+                updateClass(c.id, { hasAudio: newValue });
+            }
+        });
+    };
+
     const [activeId, setActiveId] = useState<string | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -282,50 +356,74 @@ export default function ClassManager() {
                     gap: 2
                 }}>
                     <Typography variant="h6" sx={{ mt: 1, fontWeight: 'bold' }}>Classes</Typography>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                        <TextField
-                            fullWidth
-                            size="small"
-                            placeholder="Search classes..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <Search />
-                                    </InputAdornment>
-                                ),
-                            }}
-                        />
-                        <Button
-                            variant="outlined"
-                            startIcon={<Add />}
-                            disabled={!searchTerm}
-                            onClick={async () => {
-                                if (searchTerm) {
-                                    await useStore.getState().addClass(searchTerm);
-                                    setSearchTerm('');
-                                }
-                            }}
-                        >
-                            Add
-                        </Button>
-                        <Button
-                            variant="contained"
-                            color="secondary"
-                            disabled={isSyncing}
-                            startIcon={isSyncing ? <CircularProgress size={20} color="inherit" /> : null}
-                            onClick={async () => {
-                                setIsSyncing(true);
-                                try {
-                                    await useStore.getState().syncDataset();
-                                } finally {
-                                    setIsSyncing(false);
-                                }
-                            }}
-                        >
-                            Commit
-                        </Button>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        {/* Row 1: Search & Add */}
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                            <TextField
+                                fullWidth
+                                size="small"
+                                placeholder="Search classes..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <Search />
+                                        </InputAdornment>
+                                    ),
+                                }}
+                            />
+                            <Button
+                                variant="outlined"
+                                startIcon={<Add />}
+                                disabled={!searchTerm}
+                                onClick={async () => {
+                                    if (searchTerm) {
+                                        await useStore.getState().addClass(searchTerm);
+                                        setSearchTerm('');
+                                    }
+                                }}
+                            >
+                                Add
+                            </Button>
+                        </Box>
+                        {/* Row 2: Bulk Actions */}
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Button
+                                fullWidth
+                                variant="contained"
+                                color="primary"
+                                disabled={isSyncing}
+                                startIcon={isSyncing ? <CircularProgress size={20} color="inherit" /> : null}
+                                onClick={async () => {
+                                    setIsSyncing(true);
+                                    try {
+                                        await useStore.getState().syncDataset();
+                                    } finally {
+                                        setIsSyncing(false);
+                                    }
+                                }}
+                            >
+                                UPLOAD ALL
+                            </Button>
+                            <Button
+                                fullWidth
+                                variant="outlined"
+                                color="secondary"
+                                disabled={isSyncing}
+                                onClick={handleRetrainAll}
+                            >
+                                RETRAIN ALL
+                            </Button>
+                            <Button
+                                fullWidth
+                                variant="outlined"
+                                color="inherit"
+                                onClick={handleToggleMuteAll}
+                            >
+                                {classes.some(c => c.name !== 'Unsorted' && c.hasAudio) ? "MUTE ALL" : "UNMUTE ALL"}
+                            </Button>
+                        </Box>
                     </Box>
 
                     <Box sx={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -354,48 +452,11 @@ export default function ClassManager() {
                                         setIsSyncing(false);
                                     }}
                                     hasUncommitted={classVideos.some(v => v.isCommitted === false)}
-                                    onCompute={async (id) => {
-                                        console.log(`Retraining class ${id}...`);
+                                    onCompute={async () => {
                                         setIsSyncing(true);
-
-                                        // Check removed as button is disabled if uncommitted
-                                        // const uncommitted = classVideos.some(v => v.isCommitted === false);
-                                        // if (uncommitted) {
-                                        //    ...
-                                        // }
-
-                                        const subclip = classVideos.find(v => v.parentVideoId);
-                                        if (!subclip) {
-                                            alert("No subclips found to train on.");
-                                            setIsSyncing(false);
-                                            return;
-                                        }
-
-                                        // Quick set loading state if possible (Store doesn't have transient loading state per class, but isDirty serves as a visual indicator for now or we can use local state)
-                                        // For now let's just run it.
-                                        try {
-                                            // Fetch video blob
-                                            const response = await fetch(subclip.url);
-                                            if (!response.ok) throw new Error('Failed to download video subclip');
-                                            const blob = await response.blob();
-                                            const file = new File([blob], `${realClass?.name || 'gesture'}.mp4`, { type: blob.type });
-
-                                            // Import dynamically to avoid SSR issues if any, though standard import is fine
-                                            const { analyzeGestureVideo } = await import('../services/geminiService');
-                                            const description = await analyzeGestureVideo(file, realClass?.name || 'gesture', realClass?.hasAudio);
-
-                                            // Update Store
-                                            updateClass(id, { description, isDirty: true });
-
-                                            // Auto-Commit Metadata
-                                            await useStore.getState().syncDataset();
-                                            console.log("Training & Sync complete for", id);
-                                        } catch (e) {
-                                            console.error("Training failed", e);
-                                            alert("Training failed: " + e);
-                                        } finally {
-                                            setIsSyncing(false);
-                                        }
+                                        await handleRetrainClass(classId, classVideos, realClass!);
+                                        await useStore.getState().syncDataset();
+                                        setIsSyncing(false);
                                     }}
                                 >
                                     {classVideos.map(video => (
