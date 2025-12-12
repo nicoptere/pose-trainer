@@ -4,7 +4,7 @@
 import React from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { IconButton, Paper, Typography, Box, Switch, TextField, Button, Tooltip, Badge } from '@mui/material';
-import { Delete, VolumeUp, VolumeOff, Psychology } from '@mui/icons-material';
+import { Delete, VolumeUp, VolumeOff, Psychology, Refresh } from '@mui/icons-material';
 import { GestureClass } from '../store/useStore';
 
 interface Props {
@@ -42,35 +42,23 @@ export function DroppableClass({ id, classData, children, onDelete, onUpdate, on
                 gap: 2
             }}
         >
-            {/* --- Left Column: Header, Grid, Compute (62%) --- */}
+            {/* --- Left Column: Header, Grid (62%) --- */}
             <Box sx={{ width: '62%', display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0, flexShrink: 0 }}>
-                {/* Header: Title, Audio Toggle, Delete */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="subtitle2" color={isOver ? 'primary' : 'textPrimary'} fontWeight="bold" sx={{ fontSize: '1rem' }}>
-                            {classData.name} ({classData.count})
-                        </Typography>
-                        {onUpdate && (
-                            <Tooltip title={classData.hasAudio ? "Audio Enabled" : "Audio Disabled"}>
-                                <IconButton
-                                    size="small"
-                                    onClick={() => onUpdate(id, { hasAudio: !classData.hasAudio })}
-                                    color={classData.hasAudio ? "primary" : "default"}
-                                >
-                                    {classData.hasAudio ? <VolumeUp fontSize="small" /> : <VolumeOff fontSize="small" />}
-                                </IconButton>
-                            </Tooltip>
-                        )}
-                    </Box>
-
-                    {onDelete && (
-                        <IconButton
-                            size="small"
-                            onClick={() => onDelete(id)}
-                            sx={{ opacity: 0.6, '&:hover': { opacity: 1, color: 'error.main' } }}
-                        >
-                            <Delete fontSize="small" />
-                        </IconButton>
+                {/* Header: Title, Audio Toggle */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="subtitle2" color={isOver ? 'primary' : 'textPrimary'} fontWeight="bold" sx={{ fontSize: '1rem' }}>
+                        {classData.name} ({classData.count})
+                    </Typography>
+                    {onUpdate && (
+                        <Tooltip title={classData.hasAudio ? "Audio Enabled" : "Audio Disabled"}>
+                            <IconButton
+                                size="small"
+                                onClick={() => onUpdate(id, { hasAudio: !classData.hasAudio })}
+                                color={classData.hasAudio ? "primary" : "default"}
+                            >
+                                {classData.hasAudio ? <VolumeUp fontSize="small" /> : <VolumeOff fontSize="small" />}
+                            </IconButton>
+                        </Tooltip>
                     )}
                 </Box>
 
@@ -91,27 +79,11 @@ export function DroppableClass({ id, classData, children, onDelete, onUpdate, on
                 }}>
                     {children}
                 </Box>
-
-                {/* Compute Button */}
-                {onCompute && (
-                    <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-start' }}>
-                        <Button
-                            variant="contained"
-                            size="small"
-                            color="secondary"
-                            startIcon={<Psychology />}
-                            onClick={() => onCompute(id)}
-                            sx={{ fontSize: '0.7rem', textTransform: 'none' }}
-                        >
-                            Compute Features
-                        </Button>
-                    </Box>
-                )}
             </Box>
 
-            {/* --- Right Column: Caption (38%) --- */}
+            {/* --- Right Column: Caption + Actions (38%) --- */}
             {onUpdate && (
-                <Box sx={{ width: '38%', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+                <Box sx={{ width: '38%', display: 'flex', flexShrink: 0, gap: 1 }}>
                     <TextField
                         fullWidth
                         multiline
@@ -124,15 +96,44 @@ export function DroppableClass({ id, classData, children, onDelete, onUpdate, on
                             sx: {
                                 height: '100%',
                                 alignItems: 'flex-start',
-                                overflowY: 'auto'
+                                overflowY: 'auto',
+                                p: 1
                             }
                         }}
                         sx={{
+                            flex: 1,
                             height: '100%',
                             '& .MuiInputBase-root': { height: '100%' },
                             '& textarea': { height: '100% !important', overflow: 'auto !important' }
                         }}
                     />
+
+                    {/* Action Buttons Column */}
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        {onDelete && (
+                            <Tooltip title="Delete Class">
+                                <IconButton
+                                    size="small"
+                                    onClick={() => onDelete(id)}
+                                    sx={{ opacity: 0.6, '&:hover': { opacity: 1, color: 'error.main' } }}
+                                >
+                                    <Delete fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+
+                        {onCompute && (
+                            <Tooltip title="Compute Features">
+                                <IconButton
+                                    size="small"
+                                    color="secondary"
+                                    onClick={() => onCompute(id)}
+                                >
+                                    <Refresh fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+                    </Box>
                 </Box>
             )}
         </Paper>

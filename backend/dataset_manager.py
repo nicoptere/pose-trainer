@@ -362,19 +362,22 @@ def sync_dataset(metadata, dataset_root):
                             
                             new_clip = new_clip.fx(vfx.crop, x1=x1, y1=y1, width=width, height=height)
 
-                        # Explicitly handle FPS
-                        my_fps = new_clip.fps 
-                        if not my_fps and hasattr(video, 'fps'):
-                             my_fps = video.fps
+                        # Robust FPS handling
+                        raw_fps = getattr(new_clip, 'fps', None)
+                        if not raw_fps and 'video' in locals() and hasattr(video, 'fps'):
+                            raw_fps = video.fps
                         
-                        if not my_fps:
-                            print("Warning: Could not detect FPS from source. Defaulting to 30 fps.")
-                            my_fps = 30.0
+                        my_fps = 30.0
+                        if raw_fps is not None:
+                            try:
+                                my_fps = float(raw_fps)
+                            except:
+                                print(f"Warning: Invalid fps value '{raw_fps}', defaulting to 30.0")
                         
-                        my_fps = float(my_fps)
-                        print(f"DEBUG: Writing video with FPS={my_fps}")
-
-                        # Set FPS on the clip object itself
+                        if my_fps <= 0:
+                             my_fps = 30.0
+                             
+                        print(f"DEBUG: Writing video {target_path} with FPS={my_fps}")
                         new_clip.fps = my_fps
                         
                         # Explicitly set duration to ensure subclip bounds are respected

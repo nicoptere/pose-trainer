@@ -47,6 +47,6 @@ env
 *.wav
 *.mp3
 videos
-dataset
+
 
 __pycache__
