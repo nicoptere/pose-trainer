@@ -224,25 +224,15 @@ def sync_dataset(metadata, dataset_root):
                 # Normalization for comparison
                 full_path_norm = os.path.normpath(full_path)
                 
-                # Normalization for comparison
+                # Check if desired. We need to check normalized paths against normalized desired keys.
                 # Optimization: Normalize desired keys once?
-                if 'desired_norm' not in locals():
-                     desired_norm = set(os.path.normpath(dp) for dp in desired_files)
-
+                # For now, simplistic check.
                 is_desired = False
-                if full_path_norm in desired_norm:
-                    is_desired = True
+                for dp in desired_files:
+                    if os.path.normpath(dp) == full_path_norm:
+                        is_desired = True
+                        break
                 
-                # Protect sidecar audio files
-                if not is_desired and file.endswith('.wav'):
-                    # Check if the corresponding video file is desired
-                    base_acc = os.path.splitext(full_path_norm)[0]
-                    # Try common video extensions
-                    for vext in ['.mp4', '.mov', '.webm', '.mkv', '.avi']:
-                        if (base_acc + vext) in desired_norm:
-                            is_desired = True
-                            break
-
                 if not is_desired:
                     # Don't delete metadata.json!
                     if file == 'metadata.json': continue
@@ -268,14 +258,8 @@ def sync_dataset(metadata, dataset_root):
             # Check for changes if it's a subclip
             should_recompute = False
             if info['is_subclip']:
-                # Check if audio file exists (if not, we must recompute to generate it)
-                audio_path = os.path.splitext(target_path)[0] + ".wav"
-                if not os.path.exists(audio_path):
-                        print(f"Subclip {info['id']} missing audio: recomputing...")
-                        should_recompute = True
-
                 old_sc = old_subclips_map.get(info['id'])
-                if old_sc and not should_recompute:
+                if old_sc:
                     # Compare key properties
                     # We use a small epsilon for floats if needed, but equality is usually fine for JSON roundtrip
                     # Or check thumbnailUrl as user suggested (data url change)
@@ -362,22 +346,19 @@ def sync_dataset(metadata, dataset_root):
                             
                             new_clip = new_clip.fx(vfx.crop, x1=x1, y1=y1, width=width, height=height)
 
-                        # Robust FPS handling
-                        raw_fps = getattr(new_clip, 'fps', None)
-                        if not raw_fps and 'video' in locals() and hasattr(video, 'fps'):
-                            raw_fps = video.fps
+                        # Explicitly handle FPS
+                        my_fps = new_clip.fps 
+                        if not my_fps and hasattr(video, 'fps'):
+                             my_fps = video.fps
                         
-                        my_fps = 30.0
-                        if raw_fps is not None:
-                            try:
-                                my_fps = float(raw_fps)
-                            except:
-                                print(f"Warning: Invalid fps value '{raw_fps}', defaulting to 30.0")
+                        if not my_fps:
+                            print("Warning: Could not detect FPS from source. Defaulting to 30 fps.")
+                            my_fps = 30.0
                         
-                        if my_fps <= 0:
-                             my_fps = 30.0
-                             
-                        print(f"DEBUG: Writing video {target_path} with FPS={my_fps}")
+                        my_fps = float(my_fps)
+                        print(f"DEBUG: Writing video with FPS={my_fps}")
+
+                        # Set FPS on the clip object itself
                         new_clip.fps = my_fps
                         
                         # Explicitly set duration to ensure subclip bounds are respected
@@ -390,24 +371,25 @@ def sync_dataset(metadata, dataset_root):
                         expected_duration = end_t - start_t
                         print(f"DEBUG: Writing subclip. Expected Duration: {expected_duration:.4f}s, Clip Duration: {new_clip.duration:.4f}s")
 
-                        # Write Audio File separately (requested feature)
+                        # Write video with audio (manually muxing)
+                        temp_audio = None
                         if new_clip.audio:
-                            audio_target_path = os.path.splitext(target_path)[0] + ".wav"
-                            print(f"DEBUG: Writing separate audio to {audio_target_path}")
-                            new_clip.audio.write_audiofile(audio_target_path, codec='pcm_s16le', verbose=False, logger=None)
+                            temp_audio = f"temp_audio_{info.get('id', 'video')}.m4a"
+                            temp_audio = sanitize_filename(temp_audio)
+                            try:
+                                new_clip.audio.write_audiofile(temp_audio, codec='aac', verbose=False, logger=None)
+                            except Exception as e:
+                                print(f"Warning: Could not write audio for subclip: {e}")
+                                temp_audio = None
 
-                        # Write video with audio
-                        # Reverting to write_videofile to ensure proper audio muxing
-                        new_clip.write_videofile(
-                            target_path, 
-                            fps=my_fps, 
-                            codec="libx264", 
-                            audio_codec="aac", 
-                            temp_audiofile=f"temp-audio-{info['id']}.m4a",
-                            remove_temp=True,
-                            verbose=False,
-                            logger=None
-                        )
+                        try:
+                            # Bypass write_videofile decorators by using internal writer, but include audio
+                            ffmpeg_write_video(new_clip, target_path, new_clip.fps, codec="libx264", audiofile=temp_audio)
+                        finally:
+                            if temp_audio and os.path.exists(temp_audio):
+                                try:
+                                    os.remove(temp_audio)
+                                except: pass
                 finally:
                     if os.path.exists(temp_safe_source):
                         try:
