@@ -792,6 +792,8 @@ export default function MediaBunny({ videoUrl, videoId, onClose, activeSubclipId
                     onEnded={() => setIsPlaying(false)}
                     onClick={handlePlayPause}
                     crossOrigin="anonymous"
+                    playsInline
+                    onError={(e) => console.error("Video Playback Error:", (e.currentTarget as HTMLVideoElement).error, "Src:", videoUrl)}
                 />
 
                 {/* Crop Overlay - Fade out when idle */}

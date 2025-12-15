@@ -19,6 +19,7 @@ export interface VideoClip {
   color?: string;
   crop?: { x: number; y: number; width: number; height: number };
   isCommitted?: boolean;
+  previewDirty?: boolean;
 }
 
 // Extends VideoClip to enforce subclip-specific fields

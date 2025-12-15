@@ -1,6 +1,7 @@
 import os
 import json
 import sys
+import subprocess
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -54,7 +55,9 @@ def list_videos():
 @app.route('/api/videos/<path:filename>')
 def serve_video(filename):
     dataset_root = os.path.join(os.getcwd(), 'dataset')
-    return send_from_directory(dataset_root, filename)
+    response = send_from_directory(dataset_root, filename)
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
 
 @app.route('/api/classes', methods=['POST'])
 def add_class():
@@ -165,6 +168,32 @@ def upload_files():
                 target_path = os.path.join(unsorted_path, f"{base}_{int(time.time())}{ext}")
             
             file.save(target_path)
+
+            # --- AUTO CONVERT to H.264 ---
+            try:
+                # Check if it looks like a video
+                if filename.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.webm')):
+                    tmp_convert = os.path.join(unsorted_path, f"temp_convert_{filename}")
+                    # Run ffmpeg conversion
+                    # -y overwrite, -c:v libx264 -c:a aac -movflags +faststart
+                    cmd = [
+                        'ffmpeg', '-y', '-i', target_path,
+                        '-c:v', 'libx264', '-c:a', 'aac', 
+                        '-movflags', '+faststart',
+                        tmp_convert
+                    ]
+                    # We run this synchronously. For large files, this should be a background task. 
+                    # But for this demo context, sync is safer to ensure it's ready.
+                    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    
+                    # If successful, replace original
+                    if os.path.exists(tmp_convert):
+                        os.replace(tmp_convert, target_path)
+                        app.logger.info(f"Converted {filename} to H.264")
+            except Exception as cv_err:
+                app.logger.error(f"Conversion failed for {filename}: {cv_err}")
+                # We leave the original file on failure
+            
             saved_files.append(filename)
             
         # Refresh metadata to include new files

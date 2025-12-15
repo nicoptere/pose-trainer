@@ -40,7 +40,12 @@ export default function Home() {
   const [tabIndex, setTabIndex] = useState(0);
   const dataFetchedRef = React.useRef(false);
 
+
+
+  const [mounted, setMounted] = useState(false);
+
   React.useEffect(() => {
+    setMounted(true);
     if (dataFetchedRef.current) return;
     dataFetchedRef.current = true;
     fetchDataset();
@@ -49,6 +54,8 @@ export default function Home() {
   const handleChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabIndex(newValue);
   };
+
+  if (!mounted) return null;
 
   return (
     <Container maxWidth="xl" sx={{ py: 2, height: '100vh', display: 'flex', flexDirection: 'column' }}>
