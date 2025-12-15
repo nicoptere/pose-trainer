@@ -175,7 +175,35 @@ export default function ClassManager() {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
         >
-            <Box sx={{ display: 'flex', height: '100%', gap: 2 }}>
+            <Box 
+                sx={{ display: 'flex', height: '100%', gap: 2 }}
+                onDragOver={(e) => {
+                    // Only react if dragging files
+                    if (e.dataTransfer.types.includes('Files')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsDragOver(true);
+                    }
+                }}
+                onDragLeave={(e) => {
+                    if (e.dataTransfer.types.includes('Files')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsDragOver(false);
+                    }
+                }}
+                onDrop={async (e) => {
+                    if (e.dataTransfer.types.includes('Files')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsDragOver(false);
+                        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                            const files = Array.from(e.dataTransfer.files);
+                            await useStore.getState().uploadFiles(files);
+                        }
+                    }
+                }}
+            >
 
                 {/* --- Left Column: Preview & Unsorted List --- */}
                 <Box
@@ -273,25 +301,6 @@ export default function ClassManager() {
                                     gridTemplateColumns: `repeat(${columns}, 1fr)`,
                                     gap: 1,
                                     alignContent: 'start',
-                                }}
-                                onDragOver={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    setIsDragOver(true);
-                                }}
-                                onDragLeave={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    setIsDragOver(false);
-                                }}
-                                onDrop={async (e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    setIsDragOver(false);
-                                    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                                        const files = Array.from(e.dataTransfer.files);
-                                        await useStore.getState().uploadFiles(files);
-                                    }
                                 }}
                             >
                                 {unsortedVideos.map(video => (

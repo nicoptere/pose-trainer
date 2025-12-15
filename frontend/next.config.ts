@@ -12,6 +12,11 @@ const nextConfig: NextConfig = {
   // For dev, we can manual proxy or just run Flask on 3000? No, standard is proxy.
   // But 'output: export' disables rewrites/redirects/headers.
   // We will assume valid configuration for static build.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '50mb',
+    },
+  },
 };
 
 export default nextConfig;
